@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"bytes"
 )
 
 const dbFieldName = "db"
@@ -671,7 +672,7 @@ where map[string]([]interface{}), order []orderItem, limit [2]int, ) (sql string
 	//field
 	fieldString := "*"
 	if fields != nil && len(fields) != 0 {
-		fieldString = strings.Join(fields, ",")
+		fieldString = "`" + strings.Join(fields, "`,`") + "`"
 	}
 
 	sql = sql + fieldString + " "
@@ -717,18 +718,17 @@ func buildInsertSql(tableName string, saveData map[string]interface{}) (sql stri
 	args = []interface{}{}
 	sql = "INSERT INTO " + tableName + " ("
 
-	fieldsStr := ""
-	holderStr := ""
+	var fields bytes.Buffer
+	var holder bytes.Buffer
 
 	for key, value := range saveData {
-		fieldsStr = fieldsStr + ", " + key
-		holderStr = holderStr + ", ?"
-
+		fields.WriteString(",`" + key + "`")
+		holder.WriteString(",?")
 		args = append(args, value)
 	}
 
-	fieldsStr = fieldsStr[2:]
-	holderStr = holderStr[2:]
+	fieldsStr := fields.String()[2:]
+	holderStr := holder.String()[2:]
 
 	sql = sql + fieldsStr + " ) VALUES ( " + holderStr + " )"
 
@@ -746,14 +746,14 @@ func buildUpdateSql(tableName string, saveData map[string]interface{}, where map
 	sql = "UPDATE " + tableName + " SET "
 
 	//value
-	fieldsStr := ""
-	for key, value := range saveData {
-		fieldsStr = fieldsStr + ", " + key + "= ?"
+	var fields bytes.Buffer
 
+	for key, value := range saveData {
+		fields.WriteString(",`" + key + "`=?")
 		args = append(args, value)
 	}
 
-	fieldsStr = fieldsStr[2:]
+	fieldsStr := fields.String()[2:]
 	sql = sql + fieldsStr + " "
 
 	//where
