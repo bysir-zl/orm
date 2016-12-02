@@ -250,7 +250,7 @@ func (p *Model) getWriteConnect() (conn *Connect, err error) {
 }
 
 // 原始方法 查询sql返回map
-func (p *Model) QuerySql(sql string, args ...interface{}) (data []map[string]interface{}, err error) {
+func (p *Model) QuerySql(sql string, args ...interface{}) (has bool, data []map[string]interface{}, err error) {
 	data = nil
 	c, err := p.getReadConnect()
 	if err != nil {
@@ -266,12 +266,13 @@ func (p *Model) QuerySql(sql string, args ...interface{}) (data []map[string]int
 		return
 	}
 	data = out
+	has = true
 	p.Reset()
 	return
 }
 
 // 查询主方法,返回[]Map原数据给get和first使用
-func (p *Model) QueryToMap() (data []map[string]interface{}, err error) {
+func (p *Model) QueryToMap() (has bool, data []map[string]interface{}, err error) {
 	if p.err != nil {
 		err = p.err
 		return
@@ -283,20 +284,12 @@ func (p *Model) QueryToMap() (data []map[string]interface{}, err error) {
 		return
 	}
 
-	dataMap, err := p.QuerySql(sql, args...)
-	if err != nil {
-		return
-	}
-	if len(dataMap) == 0 {
-		return
-	}
-
-	data = dataMap
+	has, data, err = p.QuerySql(sql, args...)
 	return
 }
 
 //查询返回一个数组
-func (p *Model) Get() (err error) {
+func (p *Model) Get() (has bool, err error) {
 	//从数组interface中获取一个元素
 	mo := reflect.ValueOf(p.out).Type().Elem()
 
@@ -304,21 +297,15 @@ func (p *Model) Get() (err error) {
 		err = errors.New("Get function need one slice(model) param")
 		return
 	}
-	data, err := p.QueryToMap()
-	if err != nil {
+	has, data, err := p.QueryToMap()
+	if err != nil || !has {
 		return
 	}
-
-	if len(data) == 0 {
-		err = NewNotFoundError()
-		return
-	}
-
 	util.MapListToObjList(p.out, data, dbFieldName)
 	return
 }
 
-func (p *Model) Page(page int, pageSize int) (pageData Page, err error) {
+func (p *Model) Page(page int, pageSize int) (pageData Page, has bool, err error) {
 	if page < 1 {
 		page = 1
 	}
@@ -330,24 +317,24 @@ func (p *Model) Page(page int, pageSize int) (pageData Page, err error) {
 
 	p.limit = [2]int{(page - 1) * pageSize, pageSize}
 
-	data, err := p.QueryToMap()
-	if err != nil {
+	has, data, err := p.QueryToMap()
+	if err != nil || !has {
 		return
 	}
 
 	util.MapListToObjList(p.out, data, dbFieldName)
-
 	count, err := p.Count()
 	if err != nil {
 		return
 	}
+
+	has = true
 	pageTotal := int(math.Ceil(float64(count) / float64(pageSize)))
 	pageData = Page{Total: count, Page: page, PageSize: pageSize, PageTotal: pageTotal}
-
 	return
 }
 
-func (p *Model) PageWithOutTotal(page int, pageSize int) (pageData Page, err error) {
+func (p *Model) PageWithOutTotal(page int, pageSize int) (pageData Page, has bool, err error) {
 	if page < 1 {
 		page = 1
 	}
@@ -358,29 +345,23 @@ func (p *Model) PageWithOutTotal(page int, pageSize int) (pageData Page, err err
 	}
 
 	p.limit = [2]int{(page - 1) * pageSize, pageSize}
-	data, err := p.QueryToMap()
-	if err != nil {
+	has, data, err := p.QueryToMap()
+	if err != nil || !has {
 		return
 	}
 
 	util.MapListToObjList(p.out, data, dbFieldName)
 	pageData = Page{Page: page, PageSize: pageSize}
-
 	return
 }
 
-func (p *Model) First() (err error) {
+func (p *Model) First() (has bool, err error) {
 	p.limit = [2]int{0, 1}
-	datas, err := p.QueryToMap()
-	if err != nil {
+	has, data, err := p.QueryToMap()
+	if err != nil || !has {
 		return
 	}
-	if datas == nil || len(datas) == 0 {
-		err = NewNotFoundError()
-		return
-	}
-
-	util.MapToObj(p.out, datas[0], dbFieldName)
+	util.MapToObj(p.out, data[0], dbFieldName)
 	return
 }
 
@@ -392,16 +373,15 @@ func (p *Model) Count() (count int64, err error) {
 		return
 	}
 
-	data, e := p.QuerySql(sql, args...)
+	has, data, e := p.QuerySql(sql, args...)
 	if e != nil {
 		err = e
 		return
 	}
-	if len(data) == 0 {
-		err = errors.New("query sql success,but return len is 0")
+	if !has {
+		err = errors.New("query sql success,but return data is nill")
 	}
 	count = data[0]["count"].(int64)
-
 	return
 }
 
@@ -425,7 +405,7 @@ func (p *Model) GetAutoSetField(method string) (needSet map[string]interface{}, 
 			}
 		}
 	}
-
+	err = nil
 	return
 }
 
@@ -665,7 +645,6 @@ func (p *Model) ExecSql(sql string, args ...interface{}) (affectCount int64, las
 
 func buildSelectSql(fields []string, tableName string,
 where map[string]([]interface{}), order []orderItem, limit [2]int, ) (sql string, args []interface{}, err error) {
-
 	args = []interface{}{}
 	sql = "SELECT "
 
@@ -706,6 +685,7 @@ where map[string]([]interface{}), order []orderItem, limit [2]int, ) (sql string
 		sql = sql + "LIMIT " + fmt.Sprintf("%d,%d", limit[0], limit[1]) + " "
 	}
 
+	err = nil
 	return
 }
 
@@ -778,7 +758,7 @@ func buildDeleteSql(tableName string, where map[string]([]interface{})) (sql str
 		args = as
 		sql = sql + "WHERE (" + whereString + ") "
 	}
-
+	err = nil
 	return
 }
 
@@ -792,6 +772,7 @@ func buildCountSql(tableName string, where map[string]([]interface{})) (sql stri
 		sql = sql + "WHERE (" + whereString + ") "
 	}
 
+	err = nil
 	return
 }
 
@@ -801,9 +782,9 @@ func buildWhere(where map[string]([]interface{})) (whereString string, args []in
 		args = []interface{}{}
 		whereString = " "
 
-		for key, vaules := range where {
+		for key, values := range where {
 			whereString = whereString + " AND ( " + key + " )"
-			for _, value := range vaules {
+			for _, value := range values {
 				args = append(args, value)
 			}
 		}

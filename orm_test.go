@@ -30,18 +30,15 @@ func TestOrm(t *testing.T) {
 	orm := New(config)
 
 	m2 := orm.Model(&m)
-	err := m2.Where("`Id`>?", "1").Get()
+	has, err := m2.Where("`Id`>?", "1").Get()
 	log.Print("err 	: ", err)
 	log.Print("sqls 	: ", m2.Sqls())
-	log.Print("model 	: ", m)
+	log.Print("model 	: ", has, m)
 
 	m2.Reset()
-	err = m2.Where("`Id`<?", "1").Get()
-	// Get or First maybe return err is NotFoundError
-	// please check this error
+	has, err = m2.Where("`Id`<?", "1").Get()
 	if err != nil {
-		_, ok := err.(NotFoundError)
-		log.Print("notfound 	: ", ok)
+		log.Print("has 	: ", has)
 	}
 	log.Print("------")
 	log.Print("err 	: ", err)
@@ -49,11 +46,11 @@ func TestOrm(t *testing.T) {
 	log.Print("model 	: ", m)
 
 	m3 := orm.Table("c_platform")
-	dat, err := m3.Where("`Id`>?", "1").QueryToMap()
+	has, dat, err := m3.Where("`Id`>?", "1").QueryToMap()
 	log.Print("------")
 	log.Print("err 	: ", err)
 	log.Print("sqls 	: ", m3.Sqls())
-	log.Print("map 	: ", dat)
+	log.Print("map 	: ", has, dat)
 
 	m4 := TestModel{}
 	m4.Name = "zl"

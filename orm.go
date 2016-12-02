@@ -47,6 +47,13 @@ func (p *Orm) Table(table string) *Model {
 	return p.newModel().Table(table)
 }
 
+func (p *Orm) ExecSql(sql string, args ...interface{}) (affectCount int64, lastInsertId int64, err error) {
+	return p.newModel().ExecSql(sql, args)
+}
+func (p *Orm) QuerySql(sql string, args ...interface{}) (has bool,data []map[string]interface{}, err error)  {
+	return p.newModel().QuerySql(sql, args)
+}
+
 func (p *Orm) newModel() *Model {
 	m := &Model{
 		config: p.config,
