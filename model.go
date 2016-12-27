@@ -32,6 +32,14 @@ type Model struct {
 	err              error                      // 在 where,limit等过程中出现的error
 }
 
+// 用于返回page
+type Page struct {
+	Total     int64 `json:"total,omitempty"`
+	PageTotal int   `json:"page_total,omitempty"`
+	Page      int   `json:"page,omitempty"`
+	PageSize  int   `json:"page_size,omitempty"`
+}
+
 type orderItem struct {
 	Field string
 	Desc  string
@@ -82,6 +90,9 @@ func (p *Model) OrderBy(field string, desc bool) *Model {
 	return p
 }
 
+// eg:(`Id`= ? AND `Name` = ?,1,"bysir")
+//
+// the field name is used struct's field name, u need wapper it use ``
 func (p *Model) Where(condition string, values ...interface{}) *Model {
 	if p.where == nil {
 		p.where = map[string]([]interface{}){}
@@ -92,6 +103,7 @@ func (p *Model) Where(condition string, values ...interface{}) *Model {
 		reg, err := regexp.Compile("`(.+?)`")
 		if err != nil {
 			p.err = errors.New("where string error")
+			return p
 		} else {
 			condition = reg.ReplaceAllStringFunc(condition, func(in string) string {
 				k := string(in)[1 : len(in) - 1] // 去掉左右`号
@@ -196,7 +208,7 @@ func (p *Model) getReadConnect() (conn *Connect, err error) {
 			}
 
 			// 存在read,就保存
-			readName := p.connectName + "_read"
+			readName := p.connectName + "-read"
 			if c, ok := p.config[p.connectReadName]; ok {
 				p.connectReadName = readName
 				conn = &c
@@ -227,7 +239,7 @@ func (p *Model) getWriteConnect() (conn *Connect, err error) {
 			}
 
 			// 存在read,就保存
-			readName := p.connectName + "_read"
+			readName := p.connectName + "-read"
 			if c, ok := p.config[p.connectWriteName]; ok {
 				p.connectWriteName = readName
 				conn = &c
@@ -263,6 +275,9 @@ func (p *Model) QuerySql(sql string, args ...interface{}) (has bool, data []map[
 	out, err := dbDriver.Query(sql, args...)
 	p.saveSql(sql, args...)
 	if err != nil {
+		return
+	}
+	if len(out)==0{
 		return
 	}
 	data = out
@@ -385,7 +400,6 @@ func (p *Model) Count() (count int64, err error) {
 	return
 }
 
-
 // 取得在method操作时需要自动填充的字段与值
 func (p *Model) GetAutoSetField(method string) (needSet map[string]interface{}, err error) {
 	autoField := p.modelInfo.tagMap.GetFieldMapByTagName("auto")
@@ -443,8 +457,8 @@ func (p *Model) Insert() (err error) {
 		return
 	}
 
-	tagFieldMap := p.modelInfo.tagMap.GetFieldMapByTagName(dbFieldName)
 	if autoSet != nil && len(autoSet) != 0 {
+		tagFieldMap := p.modelInfo.tagMap.GetFieldMapByTagName(dbFieldName)
 		for k, v := range autoSet {
 			if k2, ok := tagFieldMap[k]; ok {
 				saveData[k2] = v
@@ -468,10 +482,10 @@ func (p *Model) Insert() (err error) {
 	}
 
 	//找到主键，并且赋值为lastInsertId
-
 	if p.modelInfo.autoPk != "" {
-		ma := map[string]interface{}{}
-		ma[p.modelInfo.autoPk] = _insertId
+		ma := map[string]interface{}{
+			p.modelInfo.autoPk:_insertId,
+		}
 
 		util.MapToObj(p.out, ma, "")
 	}
@@ -707,8 +721,8 @@ func buildInsertSql(tableName string, saveData map[string]interface{}) (sql stri
 		args = append(args, value)
 	}
 
-	fieldsStr := fields.String()[2:]
-	holderStr := holder.String()[2:]
+	fieldsStr := fields.String()[1:]
+	holderStr := holder.String()[1:]
 
 	sql = sql + fieldsStr + " ) VALUES ( " + holderStr + " )"
 
@@ -733,7 +747,7 @@ func buildUpdateSql(tableName string, saveData map[string]interface{}, where map
 		args = append(args, value)
 	}
 
-	fieldsStr := fields.String()[2:]
+	fieldsStr := fields.String()[1:]
 	sql = sql + fieldsStr + " "
 
 	//where
@@ -847,7 +861,7 @@ func (p *modelInfo) load(m interface{}, config Config) (err error) {
 		return
 	}
 	// 获取read与write
-	connRead := p.connectName + "_read"
+	connRead := p.connectName + "-read"
 	if _, ok := config[connRead]; ok {
 		p.connectReadName = connRead
 	} else {

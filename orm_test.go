@@ -1,8 +1,8 @@
 package orm
 
 import (
-	"testing"
 	"log"
+	"testing"
 )
 
 type TestModel struct {

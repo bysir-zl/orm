@@ -26,13 +26,6 @@ func (p *Connect) SqlString() string {
 
 type Config map[string]Connect
 
-type Page struct {
-	Total     int64 `json:"total,omitempty"`
-	PageTotal int   `json:"page_total,omitempty"`
-	Page      int   `json:"page,omitempty"`
-	PageSize  int   `json:"page_size,omitempty"`
-}
-
 type Orm struct {
 	config Config
 }
@@ -48,10 +41,10 @@ func (p *Orm) Table(table string) *Model {
 }
 
 func (p *Orm) ExecSql(sql string, args ...interface{}) (affectCount int64, lastInsertId int64, err error) {
-	return p.newModel().ExecSql(sql, args)
+	return p.newModel().ExecSql(sql, args...)
 }
-func (p *Orm) QuerySql(sql string, args ...interface{}) (has bool,data []map[string]interface{}, err error)  {
-	return p.newModel().QuerySql(sql, args)
+func (p *Orm) QuerySql(sql string, args ...interface{}) (has bool, data []map[string]interface{}, err error) {
+	return p.newModel().QuerySql(sql, args...)
 }
 
 func (p *Orm) newModel() *Model {
@@ -62,6 +55,9 @@ func (p *Orm) newModel() *Model {
 }
 
 func New(config Config) *Orm {
+	if config == nil {
+		return nil
+	}
 	o := Orm{
 		config:config,
 	}
