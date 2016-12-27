@@ -30,7 +30,7 @@ func TestOrm(t *testing.T) {
 	orm := New(config)
 
 	m2 := orm.Model(&m)
-	has, err := m2.Where("`Id`>?", "1").Get()
+	has, err := m2.Where("`Id` > ?", "1").Get()
 	log.Print("err 	: ", err)
 	log.Print("sqls 	: ", m2.Sqls())
 	log.Print("model 	: ", has, m)
