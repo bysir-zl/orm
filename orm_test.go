@@ -36,7 +36,7 @@ func TestOrm(t *testing.T) {
 	log.Print("model 	: ", has, m)
 
 	m2.Reset()
-	has, err = m2.Where("`Id`<?", "1").Get()
+	has, err = m2.Where("`Id` < ?", "1").Get()
 	if err != nil {
 		log.Print("has 	: ", has)
 	}
