@@ -46,7 +46,7 @@ func TestOrm(t *testing.T) {
 	log.Print("model 	: ", m)
 
 	m3 := orm.Table("c_platform")
-	has, dat, err := m3.Where("`Id`>?", "1").QueryToMap()
+	has, dat, err := m3.Where("`Id` > ?", "1").QueryToMap()
 	log.Print("------")
 	log.Print("err 	: ", err)
 	log.Print("sqls 	: ", m3.Sqls())
