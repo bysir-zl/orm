@@ -1,6 +1,7 @@
 package orm
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/bysir-zl/bygo/util"
@@ -9,7 +10,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"bytes"
 )
 
 const dbFieldName = "db"
