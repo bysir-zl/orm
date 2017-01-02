@@ -708,6 +708,10 @@ func buildInsertSql(tableName string, saveData map[string]interface{}) (sql stri
 		err = errors.New("no save data on INSERT")
 		return
 	}
+	if tableName==""{
+		err= errors.New("not set table name")
+		return
+	}
 
 	args = []interface{}{}
 	sql = "INSERT INTO " + tableName + " ("
@@ -809,14 +813,6 @@ func buildWhere(where map[string]([]interface{})) (whereString string, args []in
 	return
 }
 
-type modelInfo struct {
-	tagMap           util.FieldTagMapper
-	table            string
-	connectName      string
-	connectReadName  string
-	connectWriteName string
-	autoPk           string
-}
 
 func (p *modelInfo) load(m interface{}, config Config) (err error) {
 	if m != nil {
