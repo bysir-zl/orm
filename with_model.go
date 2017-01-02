@@ -86,7 +86,7 @@ func (p *WithModel) GetAutoSetField(method string) (needSet map[string]interface
 	if len(autoFields) != 0 {
 		needSet = map[string]interface{}{}
 		for field, auto := range autoFields {
-			if util.ItemInArray(method, strings.Split(auto.Where, "|")) {
+			if util.ItemInArray(method, strings.Split(auto.When, "|")) {
 				if auto.Typ == "time" {
 					// 判断类型
 					if strings.Contains(p.modelInfo.FieldTyp[field], "int") {
@@ -123,6 +123,24 @@ func (p *WithModel) TranStructData(saveData *map[string]interface{}) (err error)
 				return
 			}
 			(*saveData)[field] = value
+		case "time":
+			if strings.Contains(p.modelInfo.FieldTyp[field], "int") {
+				s, _ := util.Interface2Int(v, true)
+				t := time.Unix(s, 0).Format("2006-01-02 15:04:05")
+				(*saveData)[field] = t
+			} else {
+				s, ok := util.Interface2String(v, true)
+				if !ok {
+					err = errors.New(field + " is't string, can't tran 'time'")
+					return
+				}
+				t, e := time.ParseInLocation("2006-01-02 15:04:05", s, time.Local)
+				if e != nil {
+					err = e
+					return
+				}
+				(*saveData)[field] = t.Unix()
+			}
 		}
 	}
 	return
@@ -144,6 +162,24 @@ func (p *WithModel) TranSaveData(saveData *map[string]interface{}) (err error) {
 				return
 			}
 			(*saveData)[field] = util.B2S(bs)
+		case "time":
+			if strings.Contains(p.modelInfo.FieldTyp[field], "int") {
+				s, _ := util.Interface2Int(v, true)
+				t := time.Unix(s, 0).Format("2006-01-02 15:04:05")
+				(*saveData)[field] = t
+			} else {
+				s, ok := util.Interface2String(v, true)
+				if !ok {
+					err = errors.New(field + " is't string, can't tran 'time'")
+					return
+				}
+				t, e := time.ParseInLocation("2006-01-02 15:04:05", s, time.Local)
+				if e != nil {
+					err = e
+					return
+				}
+				(*saveData)[field] = t.Unix()
+			}
 		}
 	}
 	return

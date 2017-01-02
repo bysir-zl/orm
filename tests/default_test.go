@@ -95,7 +95,7 @@ type TestModel struct {
 	Sex        bool `orm:"col(sex)" json:"sex"`
 	Role_ids   []int `orm:"col(role_ids);tran(json)" json:"role_ids"`
 	Created_at string `orm:"col(created_at);auto(insert,time)"  json:"stime"`
-	Updated_at int `orm:"col(updated_at);auto(insert|update,time);tran(time)" json:"itime"`
+	Updated_at string `orm:"col(updated_at);auto(insert|update,time);tran(time)" json:"itime"`
 }
 
 func TestOrm(t *testing.T) {
@@ -106,7 +106,7 @@ func TestOrm(t *testing.T) {
 
 	test := TestModel{}
 	test.Name = "bysir"
-	test.Role_ids = []int{1, 2, 3} // will 'tran' can transformation obj to string, then save to db
+	test.Role_ids = []int{1, 2, 3} // use 'tran' can transform obj to string, then save to db
 
 	// insert
 	err := orm.Model(&test).Insert(&test)

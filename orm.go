@@ -87,11 +87,11 @@ type ModelInfo struct {
 	connectWriteName string
 }
 type Tran struct {
-	Typ string
+	Typ string // 转换类型,目前支持 json(obj=>string), time(int=>string)
 }
 type Auto struct {
-	Where string // 当什么时候自动更新字段
-	Typ   string // 目前只支持时间的自动更新
+	When string // 当什么时候自动更新字段
+	Typ  string // 目前只支持time的自动更新
 }
 
 type Column struct {

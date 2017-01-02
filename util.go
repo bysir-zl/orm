@@ -97,7 +97,7 @@ func DecodeColumn(dbData string) *Column {
 			}
 		case "auto":
 			c.Auto = Auto{
-				Where: values[0],
+				When:  values[0],
 				Typ:   values[1],
 			}
 		}
