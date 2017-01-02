@@ -2,7 +2,6 @@ package orm
 
 import (
 	"fmt"
-	"strings"
 	"reflect"
 	"errors"
 )
@@ -102,46 +101,6 @@ type Column struct {
 	Auto Auto
 }
 
-func DecodeColumn(dbData string) *Column {
-	c := &Column{}
-	ds := strings.Split(dbData, ";")
-	l := len(ds)
-	if l > 0 {
-		c.Name = ds[0]
-	}
-	if l > 1 {
-		for i := 1; i < l; i++ {
-			kv := ds[i]
-			key := ""
-			values := []string{""}
-			if !strings.Contains(kv, "(") {
-				key = kv
-			} else {
-				kAndV := strings.Split(kv, "(")
-				key = kAndV[0]
-				v := strings.Split(kAndV[1], ")")[0]
-				values = strings.Split(v, ",")
-			}
-			switch key {
-			case "pk":
-				c.Pk = values[0]
-			case "tran":
-				c.Tran = Tran{
-					Typ:values[0],
-				}
-			case "auto":
-				c.Auto = Auto{
-					Where: values[0],
-					Typ:   values[1],
-				}
-			}
-
-		}
-	}
-
-	return c
-}
-
 // 存储模型信息
 var modelInfo = map[string]ModelInfo{}
 
@@ -161,6 +120,9 @@ func RegisterModel(prtModel interface{}) {
 		trans := map[string]Tran{}
 		for field, db := range fieldMap {
 			column := DecodeColumn(db)
+			if column.Name == "" {
+				panic(errors.New(field + " Tag orm format error"))
+			}
 			field2Db[field] = column.Name
 			if column.Pk == "auto" {
 				autoPk = field
@@ -180,7 +142,7 @@ func RegisterModel(prtModel interface{}) {
 			ConnectName:connect,
 			AutoFields: autoFields,
 			FieldTyp:   fieldTyp,
-			Trans:trans,
+			Trans:      trans,
 		}
 
 		return m

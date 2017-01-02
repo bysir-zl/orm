@@ -90,12 +90,12 @@ func DecodeColumn(dbData string) *Column {
 type TestModel struct {
 	orm string `table:"user" connect:"default" json:"-"`
 
-	Id         int    `orm:"id;pk(auto);" json:"id"`
-	Name       string `orm:"name" json:"name"`
-	Sex        bool `orm:"sex" json:"sex"`
-	Role_ids   []int `orm:"role_ids;tran(json)" json:"role_ids"`
-	Created_at string `orm:"created_at;auto(insert,time)"  json:"stime"`
-	Updated_at int `orm:"updated_at;auto(insert|update,time);tran(time)" json:"itime"`
+	Id         int    `orm:"col(id);pk(auto);" json:"id"`
+	Name       string `orm:"col(name)" json:"name"`
+	Sex        bool `orm:"col(sex)" json:"sex"`
+	Role_ids   []int `orm:"col(role_ids);tran(json)" json:"role_ids"`
+	Created_at string `orm:"col(created_at);auto(insert,time)"  json:"stime"`
+	Updated_at int `orm:"col(updated_at);auto(insert|update,time);tran(time)" json:"itime"`
 }
 
 func TestOrm(t *testing.T) {
@@ -106,7 +106,7 @@ func TestOrm(t *testing.T) {
 
 	test := TestModel{}
 	test.Name = "bysir"
-	test.Role_ids = []int{1, 2, 3}
+	test.Role_ids = []int{1, 2, 3} // will 'tran' can transformation obj to string, then save to db
 
 	// insert
 	err := orm.Model(&test).Insert(&test)

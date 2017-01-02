@@ -66,3 +66,43 @@ func FieldType(fieldInfo map[string]FieldInfo) map[string]string {
 	}
 	return result
 }
+
+func DecodeColumn(dbData string) *Column {
+	c := &Column{}
+	ds := strings.Split(dbData, ";")
+	l := len(ds)
+	if l == 0 {
+		return c
+	}
+	for i := 0; i < l; i++ {
+		kv := ds[i]
+		key := ""
+		values := []string{""}
+		if !strings.Contains(kv, "(") {
+			key = kv
+		} else {
+			kAndV := strings.Split(kv, "(")
+			key = kAndV[0]
+			v := strings.Split(kAndV[1], ")")[0]
+			values = strings.Split(v, ",")
+		}
+		switch key {
+		case "pk":
+			c.Pk = values[0]
+		case "col":
+			c.Name = values[0]
+		case "tran":
+			c.Tran = Tran{
+				Typ:values[0],
+			}
+		case "auto":
+			c.Auto = Auto{
+				Where: values[0],
+				Typ:   values[1],
+			}
+		}
+
+	}
+
+	return c
+}
