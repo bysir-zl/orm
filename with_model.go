@@ -7,12 +7,15 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"fmt"
 )
 
 type WithModel struct {
 	WithOutModel
 	ptrModel  interface{}
 	modelInfo ModelInfo
+
+	link map[string][]string // objField => []column
 }
 
 func newWithModel(ptrModel interface{}) *WithModel {
@@ -20,6 +23,8 @@ func newWithModel(ptrModel interface{}) *WithModel {
 		ptrModel:ptrModel,
 	}
 	typ := reflect.TypeOf(ptrModel).String()
+	typ = strings.Replace(typ,"*","",-1)
+	typ = strings.Replace(typ,"[]","",-1)
 	mInfo, ok := modelInfo[typ]
 	if !ok {
 		w.err = errors.New("can't found model " + typ + ",forget register?")
@@ -27,6 +32,29 @@ func newWithModel(ptrModel interface{}) *WithModel {
 		w.modelInfo = mInfo
 	}
 	return w
+}
+
+func (p *WithModel) Table(table string) *WithModel {
+	p.table = table
+	return p
+}
+
+func (p *WithModel) Connect(connect string) *WithModel {
+	p.connect = connect
+	return p
+}
+
+func (p *WithModel) Fields(fields ...string) *WithModel {
+	p.fields = fields
+	return p
+}
+
+func (p *WithModel) Where(condition string, args ...interface{}) *WithModel {
+	if p.where == nil {
+		p.where = map[string][]interface{}{}
+	}
+	p.where[condition] = args
+	return p
 }
 
 func (p *WithModel) Insert(prtModel interface{}) (err error) {
@@ -58,7 +86,7 @@ func (p *WithModel) Insert(prtModel interface{}) (err error) {
 	}
 
 	// 转换值
-	p.TranSaveData(&fieldData)
+	p.tranSaveData(&fieldData)
 
 	// mapToDb
 	dbData := map[string]interface{}{}
@@ -80,16 +108,16 @@ func (p *WithModel) Insert(prtModel interface{}) (err error) {
 	return
 }
 
-func (p *WithModel) Select(prtSliceModel interface{}) (err error) {
+func (p *WithModel) Select(prtSliceModel interface{}) (has bool, err error) {
 	if p.err != nil {
 		err = p.err
 		return
 	}
-	result, err := p.WithOutModel.
+	result, has, err := p.WithOutModel.
 		Table(p.modelInfo.Table).
 		Connect(p.modelInfo.ConnectName).
 		Select()
-	if err != nil {
+	if err != nil || !has {
 		return
 	}
 	col2Field := util.ReverseMap(p.modelInfo.FieldMap) // 数据库字段to结构体字段
@@ -105,12 +133,50 @@ func (p *WithModel) Select(prtSliceModel interface{}) (err error) {
 			}
 		}
 		// 转换值
-		p.TranStructData(&structItem)
+		p.tranStructData(&structItem)
+		p.doLink(&structItem)
 		structData[i] = structItem
 	}
-
 	util.MapListToObjList(prtSliceModel, structData, "")
+
 	return
+}
+func (p *WithModel) First(ptrModel interface{}) (has bool, err error) {
+	if p.err != nil {
+		err = p.err
+		return
+	}
+	result, has, err := p.WithOutModel.
+		Table(p.modelInfo.Table).
+		Connect(p.modelInfo.ConnectName).
+		First()
+	if err != nil || !has {
+		return
+	}
+	col2Field := util.ReverseMap(p.modelInfo.FieldMap) // 数据库字段to结构体字段
+
+	structItem := make(map[string]interface{}, len(result))
+	for k, v := range result {
+		// 字段映射
+		if structField, ok := col2Field[k]; ok {
+			structItem[structField] = v
+		}
+	}
+	// 转换值
+	p.tranStructData(&structItem)
+	p.doLink(&structItem)
+	util.MapToObj(ptrModel, structItem, "")
+
+	return
+}
+
+// 连接对象
+func (p *WithModel) Link(field string, columns ...string) *WithModel {
+	if p.link == nil {
+		p.link = map[string][]string{}
+	}
+	p.link[field] = columns
+	return p
 }
 
 // 取得在method操作时需要自动填充的字段与值
@@ -122,7 +188,7 @@ func (p *WithModel) GetAutoSetField(method string) (needSet map[string]interface
 			if util.ItemInArray(method, strings.Split(auto.When, "|")) {
 				if auto.Typ == "time" {
 					// 判断类型
-					if strings.Contains(p.modelInfo.FieldTyp[field], "int") {
+					if strings.Contains(p.modelInfo.FieldTyp[field].String(), "int") {
 						needSet[field] = time.Now().Unix()
 					} else {
 						needSet[field] = time.Now().Format("2006-01-02 15:04:05")
@@ -134,8 +200,34 @@ func (p *WithModel) GetAutoSetField(method string) (needSet map[string]interface
 	return
 }
 
+// 连接对象
+func (p *WithModel) doLink(data *map[string]interface{}) (err error) {
+	if p.link == nil || len(p.link) == 0 {
+		return
+	}
+	for field, columns := range p.link {
+		typ, ok := p.modelInfo.FieldTyp[field]
+		if !ok {
+			err = fmt.Errorf("have't %s field when link", field)
+			return
+		}
+
+		newLink := reflect.New(typ.Elem()).Interface()
+		has, er := newWithModel(newLink).Fields(columns...).Where("`Id` = ?", (*data)["RoleId"]).First(newLink)
+		if er != nil {
+			err = er
+			return
+		}
+		if has {
+			(*data)[field] = newLink
+		}
+	}
+
+	return
+}
+
 // 将db的值 转换为struct的值
-func (p *WithModel) TranStructData(data *map[string]interface{}) (err error) {
+func (p *WithModel) tranStructData(data *map[string]interface{}) (err error) {
 	for field, t := range p.modelInfo.Trans {
 		v, ok := (*data)[field]
 		if !ok {
@@ -157,7 +249,7 @@ func (p *WithModel) TranStructData(data *map[string]interface{}) (err error) {
 			}
 			(*data)[field] = value
 		case "time":
-			if strings.Contains(p.modelInfo.FieldTyp[field], "int") {
+			if strings.Contains(p.modelInfo.FieldTyp[field].String(), "int") {
 				s, _ := util.Interface2Int(v, true)
 				t := time.Unix(s, 0).Format("2006-01-02 15:04:05")
 				(*data)[field] = t
@@ -180,7 +272,7 @@ func (p *WithModel) TranStructData(data *map[string]interface{}) (err error) {
 }
 
 // 将db的值 转换为struct的值
-func (p *WithModel) TranSaveData(saveData *map[string]interface{}) (err error) {
+func (p *WithModel) tranSaveData(saveData *map[string]interface{}) (err error) {
 	for field, t := range p.modelInfo.Trans {
 		v, ok := (*saveData)[field]
 		if !ok {
@@ -196,7 +288,7 @@ func (p *WithModel) TranSaveData(saveData *map[string]interface{}) (err error) {
 			}
 			(*saveData)[field] = util.B2S(bs)
 		case "time":
-			if strings.Contains(p.modelInfo.FieldTyp[field], "int") {
+			if strings.Contains(p.modelInfo.FieldTyp[field].String(), "int") {
 				s, _ := util.Interface2Int(v, true)
 				t := time.Unix(s, 0).Format("2006-01-02 15:04:05")
 				(*saveData)[field] = t

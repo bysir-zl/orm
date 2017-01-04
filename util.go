@@ -7,7 +7,7 @@ import (
 
 type FieldInfo struct {
 	Name         string
-	Typ          string
+	Typ          reflect.Type
 	CanInterface bool
 	Tags         map[string]string
 }
@@ -21,7 +21,7 @@ func DecodeStruct(prtStruct interface{}) map[string]FieldInfo {
 		field := t.Field(i)
 		tags := EncodeTag(string(field.Tag))
 		result[field.Name] = FieldInfo{
-			Typ:         field.Type.String(),
+			Typ:         field.Type,
 			CanInterface:v.Field(i).CanInterface(),
 			Name:        field.Name,
 			Tags:        tags,
@@ -59,8 +59,8 @@ func Field2TagMap(fieldInfo map[string]FieldInfo, tag string) map[string]string 
 	return result
 }
 
-func FieldType(fieldInfo map[string]FieldInfo) map[string]string {
-	result := map[string]string{}
+func FieldType(fieldInfo map[string]FieldInfo) map[string]reflect.Type {
+	result := map[string]reflect.Type{}
 	for _, info := range fieldInfo {
 		result[info.Name] = info.Typ
 	}

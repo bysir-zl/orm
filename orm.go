@@ -1,8 +1,8 @@
 package orm
 
 import (
-	"errors"
 	"reflect"
+	"strings"
 )
 
 var (
@@ -10,13 +10,13 @@ var (
 )
 
 type ModelInfo struct {
-	FieldMap         map[string]string // struct => db
-	FieldTyp         map[string]string // 字段类型
-	Table            string            // table name
-	ConnectName      string            // connect name
-	AutoPk           string            // 自增主键
-	AutoFields       map[string]Auto
-	Trans            map[string]Tran
+	FieldMap    map[string]string // struct => db
+	FieldTyp    map[string]reflect.Type// 字段类型
+	Table       string            // table name
+	ConnectName string            // connect name
+	AutoPk      string            // 自增主键
+	AutoFields  map[string]Auto
+	Trans       map[string]Tran
 }
 
 type Tran struct {
@@ -78,10 +78,9 @@ func RegisterModel(prtModel interface{}) {
 		trans := map[string]Tran{}
 		for field, db := range fieldMap {
 			column := DecodeColumn(db)
-			if column.Name == "" {
-				panic(errors.New(field + " Tag orm format error"))
+			if column.Name != "" {
+				field2Db[field] = column.Name
 			}
-			field2Db[field] = column.Name
 			if column.Pk == "auto" {
 				autoPk = field
 			}
@@ -110,6 +109,7 @@ func RegisterModel(prtModel interface{}) {
 func RegisterModelCustom(prtModel interface{}, decoder func(prtModel interface{}) ModelInfo) {
 	mInfo := decoder(prtModel)
 	typ := reflect.TypeOf(prtModel).String()
+	typ = strings.Replace(typ,"*","",-1)
 	modelInfo[typ] = mInfo
 }
 

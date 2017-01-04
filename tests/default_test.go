@@ -88,6 +88,13 @@ func DecodeColumn(dbData string) *Column {
 	return c
 }
 
+type Role struct {
+	orm string `table:"role" connect:"default" json:"-"`
+
+	Id         int    `orm:"col(id);pk(auto);" json:"id"`
+	Name       string `orm:"col(name)" json:"name"`
+}
+
 type TestModel struct {
 	orm string `table:"user" connect:"default" json:"-"`
 
@@ -95,8 +102,11 @@ type TestModel struct {
 	Name       string `orm:"col(name)" json:"name"`
 	Sex        bool `orm:"col(sex)" json:"sex"`
 	Role_ids   []int `orm:"col(role_ids);tran(json)" json:"role_ids"`
+	RoleId int `orm:"col(role_id)"  json:"stime"`
 	Created_at string `orm:"col(created_at);auto(insert,time)"  json:"stime"`
 	Updated_at string `orm:"col(updated_at);auto(insert|update,time);tran(time)" json:"itime"`
+
+	Role *Role `orm:"link(Id,RoleId)"`
 }
 
 func TestInsert(t *testing.T) {
@@ -120,17 +130,19 @@ func TestSelect(t *testing.T) {
 
 	ts:=[]TestModel{}
 	// insert
-	err := orm.Model(&test).Select(&ts)
+	_,err := orm.Model(&ts).Link("Role").Select(&ts)
 	if err != nil {
 		t.Error(err)
 	}
 	log.Printf("%+v",ts)
-	time.Sleep(100)
+	log.Printf("%+v",ts[0].Role)
+	time.Sleep(10000000)
 }
 
 func init() {
 	orm.Debug = true
 
-	orm.RegisterDb("default", "mysql", "root:root@tcp(localhost:3306)/test")
+	orm.RegisterDb("default", "mysql", "root:@tcp(localhost:3306)/test")
 	orm.RegisterModel(new(TestModel))
+	orm.RegisterModel(new(Role))
 }

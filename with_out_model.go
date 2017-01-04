@@ -1,13 +1,16 @@
 package orm
 
-import "errors"
+import (
+	"errors"
+	"github.com/bysir-zl/bygo/log"
+)
 
 type WithOutModel struct {
 	err     error
 	connect string
 	table   string
 	fields  []string
-	where map[string]([]interface{}) // column => args
+	where map[string]([]interface{}) // condition => args
 	order []orderItem
 	limit [2]int
 }
@@ -32,6 +35,9 @@ func (p *WithOutModel) ExecSql(sql string, args ...interface{}) (affectCount int
 	if err != nil {
 		return
 	}
+	if Debug {
+		log.Info("ORM", sql, args)
+	}
 	att, insertId, err := dbDriver.Exec(sql, args...)
 	if err != nil {
 		return
@@ -51,6 +57,9 @@ func (p *WithOutModel) QuerySql(sql string, args ...interface{}) (result []map[s
 	if err != nil {
 		return
 	}
+	if Debug {
+		log.Info("ORM", sql, args)
+	}
 	result, err = dbDriver.Query(sql, args...)
 	if err != nil {
 		return
@@ -66,6 +75,19 @@ func (p *WithOutModel) Table(table string) *WithOutModel {
 
 func (p *WithOutModel) Connect(connect string) *WithOutModel {
 	p.connect = connect
+	return p
+}
+
+func (p *WithOutModel) Fields(fields ...string) *WithOutModel {
+	p.fields = fields
+	return p
+}
+
+func (p *WithOutModel) Where(condition string, args ...interface{}) *WithOutModel {
+	if p.where == nil {
+		p.where = map[string][]interface{}{}
+	}
+	p.where[condition] = args
 	return p
 }
 
@@ -146,7 +168,7 @@ func (p *WithOutModel) Update(saveData map[string]interface{}) (id int64, err er
 	return
 }
 
-func (p *WithOutModel) Select() (result []map[string]interface{}, err error) {
+func (p *WithOutModel) Select() (result []map[string]interface{}, has bool, err error) {
 	if p.err != nil {
 		err = p.err
 		return
@@ -160,5 +182,29 @@ func (p *WithOutModel) Select() (result []map[string]interface{}, err error) {
 	if err != nil {
 		return
 	}
+	has = len(result) != 0
+	return
+}
+
+func (p *WithOutModel) First() (result map[string]interface{}, has bool, err error) {
+	if p.err != nil {
+		err = p.err
+		return
+	}
+	p.limit = [2]int{0, 1}
+
+	sql, args, err := buildSelectSql(p.fields, p.table, p.where, p.order, p.limit)
+	if err != nil {
+		return
+	}
+	maps, err := p.QuerySql(sql, args...)
+	if err != nil {
+		return
+	}
+	if len(maps) == 0 {
+		return
+	}
+	result = maps[0]
+	has = true
 	return
 }
