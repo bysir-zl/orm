@@ -29,10 +29,6 @@ func Singleton(connect *Connect) (*DbDriverMysql, error) {
 			return nil, err
 		}
 		_db.SetMaxOpenConns(2000)
-		err = _db.Ping()
-		if err != nil {
-			return nil, err
-		}
 
 		db = _db
 		dbPoolMap[configString] = db
@@ -40,10 +36,10 @@ func Singleton(connect *Connect) (*DbDriverMysql, error) {
 	} else {
 		err := db.Ping()
 		if err != nil {
-			// 如果ping不通,就删除这个连接并且重新open
+			// 如果ping不通,就删除这个连接,报错
 			delete(dbPoolMap, configString)
 			dbPoolMapLock.RUnlock()
-			return Singleton(connect)
+			return nil, err
 		}
 		dbPoolMapLock.RUnlock()
 	}
@@ -59,7 +55,6 @@ func Singleton(connect *Connect) (*DbDriverMysql, error) {
 func (p *DbDriverMysql) Query(sql string, args ...interface{}) (data []map[string]interface{}, err error) {
 	// SELECT
 	err = nil
-	outData := []map[string]interface{}{}
 
 	data = nil
 	stmt, err := p.db.Prepare(sql)
@@ -84,6 +79,7 @@ func (p *DbDriverMysql) Query(sql string, args ...interface{}) (data []map[strin
 		scanArgs[i] = &values[i]
 	}
 
+	data = []map[string]interface{}{}
 	for rows.Next() {
 		st := map[string]interface{}{}
 		err2 := rows.Scan(scanArgs...)
@@ -98,9 +94,9 @@ func (p *DbDriverMysql) Query(sql string, args ...interface{}) (data []map[strin
 			}
 		}
 
-		outData = append(outData, st)
+		data = append(data, st)
 	}
-	data = outData
+
 	return
 }
 

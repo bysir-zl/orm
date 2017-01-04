@@ -7,13 +7,10 @@ import (
 	"strings"
 )
 
-type orderItem struct {
-	Field string
-	Desc  string
-}
+
 
 func buildSelectSql(fields []string, tableName string,
-where map[string]([]interface{}), order []orderItem, limit [2]int, ) (sql string, args []interface{}, err error) {
+where map[string]([]interface{}), order []orderItem, limit [2]int ) (sql string, args []interface{}, err error) {
 	args = []interface{}{}
 	sql = "SELECT "
 

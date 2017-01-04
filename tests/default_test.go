@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"github.com/bysir-zl/orm"
+	"time"
 )
 
 func TestTagmap(t *testing.T) {
@@ -98,19 +99,38 @@ type TestModel struct {
 	Updated_at string `orm:"col(updated_at);auto(insert|update,time);tran(time)" json:"itime"`
 }
 
-func TestOrm(t *testing.T) {
-	orm.Debug = true
-
-	orm.RegisterDb("default", "mysql", "root:@tcp(localhost:3306)/test")
-	orm.RegisterModel(new(TestModel))
-
+func TestInsert(t *testing.T) {
 	test := TestModel{}
 	test.Name = "bysir"
 	test.Role_ids = []int{1, 2, 3} // use 'tran' can transform obj to string, then save to db
+	test.Sex = true
 
 	// insert
 	err := orm.Model(&test).Insert(&test)
 	if err != nil {
 		t.Error(err)
 	}
+}
+
+func TestSelect(t *testing.T) {
+	test := TestModel{}
+	test.Name = "bysir"
+	test.Role_ids = []int{1, 2, 3} // use 'tran' can transform obj to string, then save to db
+	test.Sex = true
+
+	ts:=[]TestModel{}
+	// insert
+	err := orm.Model(&test).Select(&ts)
+	if err != nil {
+		t.Error(err)
+	}
+	log.Printf("%+v",ts)
+	time.Sleep(100)
+}
+
+func init() {
+	orm.Debug = true
+
+	orm.RegisterDb("default", "mysql", "root:root@tcp(localhost:3306)/test")
+	orm.RegisterModel(new(TestModel))
 }

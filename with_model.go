@@ -1,25 +1,25 @@
 package orm
 
 import (
-	"reflect"
+	"encoding/json"
 	"errors"
 	"github.com/bysir-zl/bygo/util"
+	"reflect"
 	"strings"
 	"time"
-	"encoding/json"
 )
 
 type WithModel struct {
 	WithOutModel
-	prtModel  interface{}
+	ptrModel  interface{}
 	modelInfo ModelInfo
 }
 
-func newWithModel(prtModel interface{}) *WithModel {
+func newWithModel(ptrModel interface{}) *WithModel {
 	w := &WithModel{
-		prtModel:prtModel,
+		ptrModel:ptrModel,
 	}
-	typ := reflect.TypeOf(prtModel).String()
+	typ := reflect.TypeOf(ptrModel).String()
 	mInfo, ok := modelInfo[typ]
 	if !ok {
 		w.err = errors.New("can't found model " + typ + ",forget register?")
@@ -80,6 +80,39 @@ func (p *WithModel) Insert(prtModel interface{}) (err error) {
 	return
 }
 
+func (p *WithModel) Select(prtSliceModel interface{}) (err error) {
+	if p.err != nil {
+		err = p.err
+		return
+	}
+	result, err := p.WithOutModel.
+		Table(p.modelInfo.Table).
+		Connect(p.modelInfo.ConnectName).
+		Select()
+	if err != nil {
+		return
+	}
+	col2Field := util.ReverseMap(p.modelInfo.FieldMap) // 数据库字段to结构体字段
+
+	structData := make([]map[string]interface{}, len(result))
+
+	for i, re := range result {
+		structItem := make(map[string]interface{}, len(re))
+		for k, v := range re {
+			// 字段映射
+			if structField, ok := col2Field[k]; ok {
+				structItem[structField] = v
+			}
+		}
+		// 转换值
+		p.TranStructData(&structItem)
+		structData[i] = structItem
+	}
+
+	util.MapListToObjList(prtSliceModel, structData, "")
+	return
+}
+
 // 取得在method操作时需要自动填充的字段与值
 func (p *WithModel) GetAutoSetField(method string) (needSet map[string]interface{}, err error) {
 	autoFields := p.modelInfo.AutoFields
@@ -102,9 +135,9 @@ func (p *WithModel) GetAutoSetField(method string) (needSet map[string]interface
 }
 
 // 将db的值 转换为struct的值
-func (p *WithModel) TranStructData(saveData *map[string]interface{}) (err error) {
+func (p *WithModel) TranStructData(data *map[string]interface{}) (err error) {
 	for field, t := range p.modelInfo.Trans {
-		v, ok := (*saveData)[field]
+		v, ok := (*data)[field]
 		if !ok {
 			continue
 		}
@@ -117,17 +150,17 @@ func (p *WithModel) TranStructData(saveData *map[string]interface{}) (err error)
 				return
 			}
 			var value interface{} = 1
-			e := json.Unmarshal(util.S2B(s), value)
+			e := json.Unmarshal(util.S2B(s), &value)
 			if e != nil {
 				err = errors.New(field + " value " + s + ", can't Unmarshal")
 				return
 			}
-			(*saveData)[field] = value
+			(*data)[field] = value
 		case "time":
 			if strings.Contains(p.modelInfo.FieldTyp[field], "int") {
 				s, _ := util.Interface2Int(v, true)
 				t := time.Unix(s, 0).Format("2006-01-02 15:04:05")
-				(*saveData)[field] = t
+				(*data)[field] = t
 			} else {
 				s, ok := util.Interface2String(v, true)
 				if !ok {
@@ -139,7 +172,7 @@ func (p *WithModel) TranStructData(saveData *map[string]interface{}) (err error)
 					err = e
 					return
 				}
-				(*saveData)[field] = t.Unix()
+				(*data)[field] = t.Unix()
 			}
 		}
 	}
