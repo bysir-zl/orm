@@ -100,6 +100,11 @@ func DecodeColumn(dbData string) *Column {
 				When:  values[0],
 				Typ:   values[1],
 			}
+		case "link":
+			c.Link = Link{
+				SelfKey:values[0],
+				LinkKey:values[1],
+			}
 		}
 
 	}

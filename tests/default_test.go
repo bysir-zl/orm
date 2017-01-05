@@ -91,8 +91,8 @@ func DecodeColumn(dbData string) *Column {
 type Role struct {
 	orm string `table:"role" connect:"default" json:"-"`
 
-	Id         int    `orm:"col(id);pk(auto);" json:"id"`
-	Name       string `orm:"col(name)" json:"name"`
+	Id   int    `orm:"col(id);pk(auto);" json:"id"`
+	Name string `orm:"col(name)" json:"name"`
 }
 
 type TestModel struct {
@@ -102,11 +102,15 @@ type TestModel struct {
 	Name       string `orm:"col(name)" json:"name"`
 	Sex        bool `orm:"col(sex)" json:"sex"`
 	Role_ids   []int `orm:"col(role_ids);tran(json)" json:"role_ids"`
-	RoleId int `orm:"col(role_id)"  json:"stime"`
+	RoleId     int `orm:"col(role_id)"  json:"stime"`
 	Created_at string `orm:"col(created_at);auto(insert,time)"  json:"stime"`
 	Updated_at string `orm:"col(updated_at);auto(insert|update,time);tran(time)" json:"itime"`
 
-	Role *Role `orm:"link(Id,RoleId)"`
+	RoleRaw *Role `orm:"col(role_raw);tran(json)"`
+	Roles   []Role `orm:"col(role_raws);tran(json)"`
+
+	Role   *Role `orm:"link(RoleId,Id)"`
+	Roles2 []Role `orm:"link(Role_ids,Id)"`
 }
 
 func TestInsert(t *testing.T) {
@@ -114,8 +118,18 @@ func TestInsert(t *testing.T) {
 	test.Name = "bysir"
 	test.Role_ids = []int{1, 2, 3} // use 'tran' can transform obj to string, then save to db
 	test.Sex = true
+	r := &Role{
+		Name:"s",
+	}
+	rs := []Role{
+		{
+			Name:"sb",
+		},
+	}
+	test.Role = r
+	test.RoleRaw = r
+	test.Roles = rs
 
-	// insert
 	err := orm.Model(&test).Insert(&test)
 	if err != nil {
 		t.Error(err)
@@ -128,21 +142,26 @@ func TestSelect(t *testing.T) {
 	test.Role_ids = []int{1, 2, 3} // use 'tran' can transform obj to string, then save to db
 	test.Sex = true
 
-	ts:=[]TestModel{}
-	// insert
-	_,err := orm.Model(&ts).Link("Role").Select(&ts)
+	ts := []TestModel{}
+	_, err := orm.Model(&ts).
+		Link("Role").
+		Link("Roles2").
+		Select(&ts)
 	if err != nil {
 		t.Error(err)
 	}
-	log.Printf("%+v",ts)
-	log.Printf("%+v",ts[0].Role)
+	log.Printf("        %+v", ts)
+	log.Printf("role    %+v", ts[0].Role)
+	log.Printf("roleraw %+v", ts[2].RoleRaw)
+	log.Printf("roles   %+v", ts[2].Roles)
+	log.Printf("roles2  %+v", ts[2].Roles2)
 	time.Sleep(10000000)
 }
 
 func init() {
 	orm.Debug = true
 
-	orm.RegisterDb("default", "mysql", "root:@tcp(localhost:3306)/test")
+	orm.RegisterDb("default", "mysql", "root:root@tcp(localhost:3306)/test")
 	orm.RegisterModel(new(TestModel))
 	orm.RegisterModel(new(Role))
 }

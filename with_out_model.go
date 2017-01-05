@@ -2,7 +2,8 @@ package orm
 
 import (
 	"errors"
-	"github.com/bysir-zl/bygo/log"
+	"time"
+	"strings"
 )
 
 type WithOutModel struct {
@@ -35,10 +36,10 @@ func (p *WithOutModel) ExecSql(sql string, args ...interface{}) (affectCount int
 	if err != nil {
 		return
 	}
-	if Debug {
-		log.Info("ORM", sql, args)
-	}
+	t1 := time.Now()
 	att, insertId, err := dbDriver.Exec(sql, args...)
+	elapsed := time.Since(t1)
+	info("SQL : "+sql, args, elapsed)
 	if err != nil {
 		return
 	}
@@ -57,10 +58,11 @@ func (p *WithOutModel) QuerySql(sql string, args ...interface{}) (result []map[s
 	if err != nil {
 		return
 	}
-	if Debug {
-		log.Info("ORM", sql, args)
-	}
+
+	t1 := time.Now()
 	result, err = dbDriver.Query(sql, args...)
+	elapsed := time.Since(t1)
+	info("SQL : "+sql, args, elapsed)
 	if err != nil {
 		return
 	}
@@ -71,6 +73,10 @@ func (p *WithOutModel) QuerySql(sql string, args ...interface{}) (result []map[s
 func (p *WithOutModel) Table(table string) *WithOutModel {
 	p.table = table
 	return p
+}
+
+func (p *WithOutModel) GetTable() string {
+	return p.table
 }
 
 func (p *WithOutModel) Connect(connect string) *WithOutModel {
@@ -87,6 +93,23 @@ func (p *WithOutModel) Where(condition string, args ...interface{}) *WithOutMode
 	if p.where == nil {
 		p.where = map[string][]interface{}{}
 	}
+	p.where[condition] = args
+	return p
+}
+
+func (p *WithOutModel) WhereIn(condition string, args ...interface{}) *WithOutModel {
+	if args == nil || len(args) == 0 {
+		return p
+	}
+	if p.where == nil {
+		p.where = map[string][]interface{}{}
+	}
+	if !strings.Contains(condition, "(?)") {
+		p.err = errors.New("WhereIn condition must contains '(?)'")
+		return p
+	}
+	s := strings.Repeat(",?", len(args))
+	condition = strings.Replace(condition, "(?)", "("+s[1:]+")", -1)
 	p.where[condition] = args
 	return p
 }
@@ -192,16 +215,8 @@ func (p *WithOutModel) First() (result map[string]interface{}, has bool, err err
 		return
 	}
 	p.limit = [2]int{0, 1}
-
-	sql, args, err := buildSelectSql(p.fields, p.table, p.where, p.order, p.limit)
-	if err != nil {
-		return
-	}
-	maps, err := p.QuerySql(sql, args...)
-	if err != nil {
-		return
-	}
-	if len(maps) == 0 {
+	maps, has, err := p.Select()
+	if !has || err != nil {
 		return
 	}
 	result = maps[0]

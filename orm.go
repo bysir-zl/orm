@@ -10,13 +10,14 @@ var (
 )
 
 type ModelInfo struct {
-	FieldMap    map[string]string // struct => db
-	FieldTyp    map[string]reflect.Type// 字段类型
-	Table       string            // table name
-	ConnectName string            // connect name
-	AutoPk      string            // 自增主键
+	FieldMap    map[string]string       // struct => db
+	FieldTyp    map[string]reflect.Type // 字段类型
+	Table       string                  // table name
+	ConnectName string                  // connect name
+	AutoPk      string                  // 自增主键
 	AutoFields  map[string]Auto
 	Trans       map[string]Tran
+	Links       map[string]Link
 }
 
 type Tran struct {
@@ -28,11 +29,17 @@ type Auto struct {
 	Typ  string // 目前只支持time的自动更新
 }
 
+type Link struct {
+	SelfKey string // 自身的字段
+	LinkKey string // 要连接的对象的字段
+}
+
 type Column struct {
 	Name string
 	Pk   string // "":不是pk, auto:自增pk
 	Tran Tran   // 自动转换规则 json:string转换为field
 	Auto Auto
+	Link Link
 }
 
 // 存储模型信息
@@ -76,6 +83,7 @@ func RegisterModel(prtModel interface{}) {
 		autoPk := ""
 		autoFields := map[string]Auto{}
 		trans := map[string]Tran{}
+		links := map[string]Link{}
 		for field, db := range fieldMap {
 			column := DecodeColumn(db)
 			if column.Name != "" {
@@ -90,6 +98,9 @@ func RegisterModel(prtModel interface{}) {
 			if column.Tran.Typ != "" {
 				trans[field] = column.Tran
 			}
+			if column.Link.SelfKey!= "" {
+				links[field] = column.Link
+			}
 		}
 
 		m := ModelInfo{
@@ -100,6 +111,7 @@ func RegisterModel(prtModel interface{}) {
 			AutoFields: autoFields,
 			FieldTyp:   fieldTyp,
 			Trans:      trans,
+			Links:      links,
 		}
 
 		return m
@@ -109,7 +121,7 @@ func RegisterModel(prtModel interface{}) {
 func RegisterModelCustom(prtModel interface{}, decoder func(prtModel interface{}) ModelInfo) {
 	mInfo := decoder(prtModel)
 	typ := reflect.TypeOf(prtModel).String()
-	typ = strings.Replace(typ,"*","",-1)
+	typ = strings.Replace(typ, "*", "", -1)
 	modelInfo[typ] = mInfo
 }
 

@@ -3,28 +3,27 @@ package orm
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/bysir-zl/bygo/util"
 	"reflect"
 	"strings"
 	"time"
-	"fmt"
 )
 
 type WithModel struct {
 	WithOutModel
-	ptrModel  interface{}
 	modelInfo ModelInfo
 
 	link map[string][]string // objField => []column
 }
 
 func newWithModel(ptrModel interface{}) *WithModel {
-	w := &WithModel{
-		ptrModel:ptrModel,
-	}
+
+	w := &WithModel{}
+
 	typ := reflect.TypeOf(ptrModel).String()
-	typ = strings.Replace(typ,"*","",-1)
-	typ = strings.Replace(typ,"[]","",-1)
+	typ = strings.Replace(typ, "*", "", -1)
+	typ = strings.Replace(typ, "[]", "", -1)
 	mInfo, ok := modelInfo[typ]
 	if !ok {
 		w.err = errors.New("can't found model " + typ + ",forget register?")
@@ -34,26 +33,49 @@ func newWithModel(ptrModel interface{}) *WithModel {
 	return w
 }
 
+func (p *WithModel) checkPtrModel(ptrModel interface{}) interface{} {
+	m := reflect.ValueOf(ptrModel)
+	if m.Kind() != reflect.Ptr {
+		p.err = errors.New("ptrModel is't a ptr interface")
+		return nil
+	}
+
+	for {
+		if m.Elem().Kind() == reflect.Ptr {
+			m = m.Elem()
+		} else {
+			break
+		}
+	}
+	//if !m.Elem().IsNil(){
+	//	m.Elem().Set(reflect.New(m.Elem().Type()).Elem())
+	//}
+	//info(m.Interface())
+	return m.Interface()
+}
+
 func (p *WithModel) Table(table string) *WithModel {
-	p.table = table
+	p.WithOutModel.Table(table)
 	return p
 }
 
 func (p *WithModel) Connect(connect string) *WithModel {
-	p.connect = connect
+	p.WithOutModel.Connect(connect)
 	return p
 }
 
 func (p *WithModel) Fields(fields ...string) *WithModel {
-	p.fields = fields
+	p.WithOutModel.Fields(fields...)
 	return p
 }
 
 func (p *WithModel) Where(condition string, args ...interface{}) *WithModel {
-	if p.where == nil {
-		p.where = map[string][]interface{}{}
-	}
-	p.where[condition] = args
+	p.WithOutModel.Where(condition, args...)
+	return p
+}
+
+func (p *WithModel) WhereIn(condition string, args ...interface{}) *WithModel {
+	p.WithOutModel.WhereIn(condition, args...)
 	return p
 }
 
@@ -108,7 +130,7 @@ func (p *WithModel) Insert(prtModel interface{}) (err error) {
 	return
 }
 
-func (p *WithModel) Select(prtSliceModel interface{}) (has bool, err error) {
+func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 	if p.err != nil {
 		err = p.err
 		return
@@ -120,13 +142,34 @@ func (p *WithModel) Select(prtSliceModel interface{}) (has bool, err error) {
 	if err != nil || !has {
 		return
 	}
+
 	col2Field := util.ReverseMap(p.modelInfo.FieldMap) // 数据库字段to结构体字段
 
-	structData := make([]map[string]interface{}, len(result))
-
-	for i, re := range result {
-		structItem := make(map[string]interface{}, len(re))
-		for k, v := range re {
+	// 是数组还是一个对象
+	// todo 可以合并为一个方法
+	if strings.Contains(reflect.TypeOf(ptrSliceModel).String(), "[") {
+		structData := make([]map[string]interface{}, len(result))
+		for i, re := range result {
+			structItem := make(map[string]interface{}, len(re))
+			for k, v := range re {
+				// 字段映射
+				if structField, ok := col2Field[k]; ok {
+					structItem[structField] = v
+				}
+			}
+			// 转换值
+			p.tranStructData(&structItem)
+			p.doLink(&structItem)
+			structData[i] = structItem
+		}
+		errInfo := util.MapListToObjList(ptrSliceModel, structData, "")
+		if errInfo != "" {
+			warn("table("+p.table+")", "tran", errInfo)
+		}
+	} else {
+		resultItem := result[0]
+		structItem := make(map[string]interface{}, len(resultItem))
+		for k, v := range resultItem {
 			// 字段映射
 			if structField, ok := col2Field[k]; ok {
 				structItem[structField] = v
@@ -135,37 +178,11 @@ func (p *WithModel) Select(prtSliceModel interface{}) (has bool, err error) {
 		// 转换值
 		p.tranStructData(&structItem)
 		p.doLink(&structItem)
-		structData[i] = structItem
-	}
-	util.MapListToObjList(prtSliceModel, structData, "")
-
-	return
-}
-func (p *WithModel) First(ptrModel interface{}) (has bool, err error) {
-	if p.err != nil {
-		err = p.err
-		return
-	}
-	result, has, err := p.WithOutModel.
-		Table(p.modelInfo.Table).
-		Connect(p.modelInfo.ConnectName).
-		First()
-	if err != nil || !has {
-		return
-	}
-	col2Field := util.ReverseMap(p.modelInfo.FieldMap) // 数据库字段to结构体字段
-
-	structItem := make(map[string]interface{}, len(result))
-	for k, v := range result {
-		// 字段映射
-		if structField, ok := col2Field[k]; ok {
-			structItem[structField] = v
+		_, errInfo := util.MapToObj(ptrSliceModel, structItem, "")
+		if errInfo != "" {
+			warn("table("+p.table+")", "tran", errInfo)
 		}
 	}
-	// 转换值
-	p.tranStructData(&structItem)
-	p.doLink(&structItem)
-	util.MapToObj(ptrModel, structItem, "")
 
 	return
 }
@@ -201,25 +218,80 @@ func (p *WithModel) GetAutoSetField(method string) (needSet map[string]interface
 }
 
 // 连接对象
-func (p *WithModel) doLink(data *map[string]interface{}) (err error) {
+// todo 在需要多次link的时候, 优化查询相同表(where in)
+func (p *WithModel) doLink(data *map[string]interface{}) {
 	if p.link == nil || len(p.link) == 0 {
 		return
 	}
+
+	// 要link的字段
 	for field, columns := range p.link {
+		// 判断有无field
 		typ, ok := p.modelInfo.FieldTyp[field]
 		if !ok {
-			err = fmt.Errorf("have't %s field when link", field)
-			return
+			err := fmt.Errorf("have't %s field when link", field)
+			warn("table("+p.table+")", err)
+			continue
+		}
+		// 判断有无link属性
+		link, ok := p.modelInfo.Links[field]
+		if !ok {
+			err := fmt.Errorf("have't link tag, plase use tag `orm:\"link(RoleId,Id)\"` on %s", field)
+			warn("table("+p.table+")", err)
+			continue
 		}
 
-		newLink := reflect.New(typ.Elem()).Interface()
-		has, er := newWithModel(newLink).Fields(columns...).Where("`Id` = ?", (*data)["RoleId"]).First(newLink)
-		if er != nil {
-			err = er
-			return
+		var linkPtrValue reflect.Value
+		// 判断是否是一个指针,
+		// 如果是 则取得指针值的type new出来
+		// 在保存值得时候,如果不是指针, 则取出elem保存
+		isPtr := typ.Kind() == reflect.Ptr
+		if isPtr {
+			//typ = typ.Elem()
+		}
+
+		linkPtrValue = reflect.New(typ)
+
+		// 检查在原来的data中有无要连接的键的值
+		val := (*data)[link.SelfKey]
+		if val == nil {
+			err := fmt.Errorf("have't '%s' value to link", link.SelfKey)
+			warn("table("+p.table+")", err)
+			continue
+		}
+		m := newWithModel(linkPtrValue.Interface()).Fields(columns...)
+		// 要连接的是否是一个slice
+		if typ.Kind() == reflect.Slice {
+			valValue := reflect.ValueOf(val)
+			//info( valValue.Kind())
+			if valValue.Kind() != reflect.Slice {
+				err := fmt.Errorf("'%s' value is not slice to link slice", link.SelfKey)
+				warn("table("+p.table+")", err)
+				continue
+			}
+			vl := valValue.Len()
+			vs := make([]interface{}, vl)
+			for i := 0; i < vl; i++ {
+				vs[i] = valValue.Index(i).Interface()
+			}
+
+			m = m.WhereIn("`"+link.LinkKey+"` in (?)", vs...)
+		} else {
+			m = m.Where("`"+link.LinkKey+"` = ?", val)
+		}
+
+		has, err := m.Select(linkPtrValue.Interface())
+
+		if err != nil {
+			warn("table("+p.table+")", err)
+			continue
 		}
 		if has {
-			(*data)[field] = newLink
+			//if isPtr {
+			//	(*data)[field] = linkPtrValue.Interface()
+			//} else {
+				(*data)[field] = linkPtrValue.Elem().Interface()
+			//}
 		}
 	}
 
@@ -227,7 +299,7 @@ func (p *WithModel) doLink(data *map[string]interface{}) (err error) {
 }
 
 // 将db的值 转换为struct的值
-func (p *WithModel) tranStructData(data *map[string]interface{}) (err error) {
+func (p *WithModel) tranStructData(data *map[string]interface{}) {
 	for field, t := range p.modelInfo.Trans {
 		v, ok := (*data)[field]
 		if !ok {
@@ -238,41 +310,49 @@ func (p *WithModel) tranStructData(data *map[string]interface{}) (err error) {
 		case "json":
 			s, ok := util.Interface2String(v, true)
 			if !ok {
-				err = errors.New(field + " is't string, can't tran 'json'")
-				return
+				err := errors.New(field + " is't string, can't tran 'json'")
+				warn("table("+p.table+")", "tran", err)
+				continue
 			}
-			var value interface{} = 1
-			e := json.Unmarshal(util.S2B(s), &value)
-			if e != nil {
-				err = errors.New(field + " value " + s + ", can't Unmarshal")
-				return
+
+			ptrValue := reflect.New(p.modelInfo.FieldTyp[field])
+			err := json.Unmarshal(util.S2B(s), ptrValue.Interface())
+			if err != nil {
+				warn("table("+p.table+")", "tran"+" field("+field+")", err)
+				delete(*data, field)
+			} else {
+				value := ptrValue.Elem().Interface()
+				(*data)[field] = value
 			}
-			(*data)[field] = value
 		case "time":
 			if strings.Contains(p.modelInfo.FieldTyp[field].String(), "int") {
+				// 如果struct的字段是int型的,还要转换,则数据库里的是string型的
+				// timeString  => int
+				s, ok := util.Interface2String(v, true)
+				if !ok {
+					err := errors.New(field + " is't string, can't tran 'time'")
+					warn("table("+p.table+")", "tran", err)
+					continue
+				}
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", s, time.Local)
+				if err != nil {
+					warn("table("+p.table+")", "tran", err)
+					continue
+				}
+				(*data)[field] = t.Unix()
+			} else {
+				// int => timeString
 				s, _ := util.Interface2Int(v, true)
 				t := time.Unix(s, 0).Format("2006-01-02 15:04:05")
 				(*data)[field] = t
-			} else {
-				s, ok := util.Interface2String(v, true)
-				if !ok {
-					err = errors.New(field + " is't string, can't tran 'time'")
-					return
-				}
-				t, e := time.ParseInLocation("2006-01-02 15:04:05", s, time.Local)
-				if e != nil {
-					err = e
-					return
-				}
-				(*data)[field] = t.Unix()
 			}
 		}
 	}
 	return
 }
 
-// 将db的值 转换为struct的值
-func (p *WithModel) tranSaveData(saveData *map[string]interface{}) (err error) {
+// 将struct的值 转换为db的值
+func (p *WithModel) tranSaveData(saveData *map[string]interface{}) {
 	for field, t := range p.modelInfo.Trans {
 		v, ok := (*saveData)[field]
 		if !ok {
@@ -281,27 +361,31 @@ func (p *WithModel) tranSaveData(saveData *map[string]interface{}) (err error) {
 
 		switch t.Typ {
 		case "json":
-			bs, e := json.Marshal(v)
-			if e != nil {
-				err = e
-				return
+			// object => jsonString
+			bs, err := json.Marshal(v)
+			if err != nil {
+				warn("table("+p.table+")", "tran", err)
+				continue
 			}
 			(*saveData)[field] = util.B2S(bs)
 		case "time":
 			if strings.Contains(p.modelInfo.FieldTyp[field].String(), "int") {
+				// int => timeString
 				s, _ := util.Interface2Int(v, true)
 				t := time.Unix(s, 0).Format("2006-01-02 15:04:05")
 				(*saveData)[field] = t
 			} else {
+				// timeString => int
 				s, ok := util.Interface2String(v, true)
 				if !ok {
-					err = errors.New(field + " is't string, can't tran 'time'")
-					return
+					err := errors.New(field + " is't string, can't tran 'time'")
+					warn("table("+p.table+")", "tran", err)
+					continue
 				}
-				t, e := time.ParseInLocation("2006-01-02 15:04:05", s, time.Local)
-				if e != nil {
-					err = e
-					return
+				t, err := time.ParseInLocation("2006-01-02 15:04:05", s, time.Local)
+				if err != nil {
+					warn("table("+p.table+")", "tran", err)
+					continue
 				}
 				(*saveData)[field] = t.Unix()
 			}
