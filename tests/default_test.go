@@ -144,8 +144,8 @@ func TestSelect(t *testing.T) {
 
 	ts := []TestModel{}
 	_, err := orm.Model(&ts).
-		Link("Role").
-		Link("Roles2").
+		Link("Role","`Hide` = 2",[]string{"Name"}).
+		Link("Roles2","",nil).
 		Select(&ts)
 	if err != nil {
 		t.Error(err)
@@ -161,7 +161,7 @@ func TestSelect(t *testing.T) {
 func init() {
 	orm.Debug = true
 
-	orm.RegisterDb("default", "mysql", "root:root@tcp(localhost:3306)/test")
+	orm.RegisterDb("default", "mysql", "root:@tcp(localhost:3306)/test")
 	orm.RegisterModel(new(TestModel))
 	orm.RegisterModel(new(Role))
 }

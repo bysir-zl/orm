@@ -8,13 +8,16 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"github.com/bysir-zl/bygo/log"
 )
 
 type WithModel struct {
 	WithOutModel
 	modelInfo ModelInfo
 
-	link map[string][]string // objField => []column
+	link map[string]linkData // objFieldName => linkData
+
+	preLinkData map[InOneSql]PreLink
 }
 
 func newWithModel(ptrModel interface{}) *WithModel {
@@ -30,6 +33,8 @@ func newWithModel(ptrModel interface{}) *WithModel {
 	} else {
 		w.modelInfo = mInfo
 	}
+	w.table = w.modelInfo.Table
+	w.connect = w.modelInfo.ConnectName
 	return w
 }
 
@@ -120,8 +125,6 @@ func (p *WithModel) Insert(prtModel interface{}) (err error) {
 	}
 
 	id, err := p.WithOutModel.
-		Table(p.modelInfo.Table).
-		Connect(p.modelInfo.ConnectName).
 		Insert(dbData)
 	if err != nil {
 		return
@@ -136,8 +139,6 @@ func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 		return
 	}
 	result, has, err := p.WithOutModel.
-		Table(p.modelInfo.Table).
-		Connect(p.modelInfo.ConnectName).
 		Select()
 	if err != nil || !has {
 		return
@@ -146,7 +147,6 @@ func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 	col2Field := util.ReverseMap(p.modelInfo.FieldMap) // 数据库字段to结构体字段
 
 	// 是数组还是一个对象
-	// todo 可以合并为一个方法
 	if strings.Contains(reflect.TypeOf(ptrSliceModel).String(), "[") {
 		structData := make([]map[string]interface{}, len(result))
 		for i, re := range result {
@@ -159,9 +159,10 @@ func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 			}
 			// 转换值
 			p.tranStructData(&structItem)
-			p.doLink(&structItem)
+			p.preLink(&structItem)
 			structData[i] = structItem
 		}
+		p.doLinkMulti(&structData)
 		errInfo := util.MapListToObjList(ptrSliceModel, structData, "")
 		if errInfo != "" {
 			warn("table("+p.table+")", "tran", errInfo)
@@ -187,12 +188,17 @@ func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 	return
 }
 
+type linkData struct {
+	ExtCondition string
+	Column       []string
+}
+
 // 连接对象
-func (p *WithModel) Link(field string, columns ...string) *WithModel {
+func (p *WithModel) Link(field string, extCondition string, columns []string) *WithModel {
 	if p.link == nil {
-		p.link = map[string][]string{}
+		p.link = map[string]linkData{}
 	}
-	p.link[field] = columns
+	p.link[field] = linkData{ExtCondition:extCondition, Column:columns}
 	return p
 }
 
@@ -217,15 +223,113 @@ func (p *WithModel) GetAutoSetField(method string) (needSet map[string]interface
 	return
 }
 
-// 连接对象
-// todo 在需要多次link的时候, 优化查询相同表(where in)
-func (p *WithModel) doLink(data *map[string]interface{}) {
+type PreLink struct {
+	Args   []interface{}
+	Column []string
+}
+
+// 能组装成一个条sql的
+type InOneSql struct {
+	Table      string
+	WhereField string
+}
+
+// 准备link
+func (p *WithModel) preLink(data *map[string]interface{}) {
 	if p.link == nil || len(p.link) == 0 {
 		return
 	}
 
+	if p.preLinkData == nil {
+		p.preLinkData = map[InOneSql]PreLink{} // table => (key => PreLink)
+	}
+
 	// 要link的字段
-	for field, columns := range p.link {
+	for field, linkData := range p.link {
+		// 判断有无field
+		typ, ok := p.modelInfo.FieldTyp[field]
+		if !ok {
+			err := fmt.Errorf("have't %s field when link", field)
+			warn("table("+p.table+")", err)
+			continue
+		}
+		// 判断有无link属性
+		link, ok := p.modelInfo.Links[field]
+		if !ok {
+			err := fmt.Errorf("have't link tag, plase use tag `orm:\"link(RoleId,Id)\"` on %s", field)
+			warn("table("+p.table+")", err)
+			continue
+		}
+		// 检查在原来的data中有无要连接的键的值
+		//log.Info("xx",data)
+		val := (*data)[link.SelfKey]
+		if val == nil {
+			err := fmt.Errorf("have't '%s' value to link", link.SelfKey)
+			warn("table("+p.table+")", err)
+			continue
+		}
+
+		linkPtrValue := reflect.New(typ)
+
+		where:="`" + link.LinkKey + "` in (?) AND " + linkData.ExtCondition
+		one := InOneSql{
+			Table:     newWithModel(linkPtrValue.Interface()).GetTable(),
+			WhereField:strings.Trim(where,"AND"),
+		}
+		args := []interface{}{}
+
+		// 要连接的是否是一个slice
+		if typ.Kind() == reflect.Slice {
+			valValue := reflect.ValueOf(val)
+			//info( valValue.Kind())
+			if valValue.Kind() != reflect.Slice {
+				err := fmt.Errorf("'%s' value is not slice to link slice", link.SelfKey)
+				warn("table("+p.table+")", err)
+				continue
+			}
+			vl := valValue.Len()
+			vs := make([]interface{}, vl)
+			for i := 0; i < vl; i++ {
+				vs[i] = valValue.Index(i).Interface()
+			}
+			args = append(args, vs...)
+		} else {
+			args = append(args, val)
+		}
+
+		pre := PreLink{}
+		if o, ok := p.preLinkData[one]; !ok {
+			pre.Column = linkData.Column
+			pre.Args = args
+			p.preLinkData[one] = pre
+		} else {
+			pre.Args = append(o.Args, args...)
+			p.preLinkData[one] = pre
+		}
+	}
+	return
+}
+
+func (p *WithModel) doLinkMulti(data *[]map[string]interface{})  {
+	log.Info("sbsb", p.preLinkData)
+}
+
+// 连接对象
+// todo 在需要多次link的时候, 优化查询相同表(where in)
+func (p *WithModel) doLink(data *map[string]interface{}) {
+	p.preLinkData = nil
+
+	if p.link == nil || len(p.link) == 0 {
+		return
+	}
+	linkData:= map[interface{}]interface{}{} // 已经查询好的数据
+
+
+	log.Info("sbsb", p.preLinkData)
+
+
+	// 要link的字段
+	for field, linkData := range p.link {
 		// 判断有无field
 		typ, ok := p.modelInfo.FieldTyp[field]
 		if !ok {
@@ -241,16 +345,7 @@ func (p *WithModel) doLink(data *map[string]interface{}) {
 			continue
 		}
 
-		var linkPtrValue reflect.Value
-		// 判断是否是一个指针,
-		// 如果是 则取得指针值的type new出来
-		// 在保存值得时候,如果不是指针, 则取出elem保存
-		isPtr := typ.Kind() == reflect.Ptr
-		if isPtr {
-			//typ = typ.Elem()
-		}
-
-		linkPtrValue = reflect.New(typ)
+		linkPtrValue := reflect.New(typ)
 
 		// 检查在原来的data中有无要连接的键的值
 		val := (*data)[link.SelfKey]
@@ -259,7 +354,8 @@ func (p *WithModel) doLink(data *map[string]interface{}) {
 			warn("table("+p.table+")", err)
 			continue
 		}
-		m := newWithModel(linkPtrValue.Interface()).Fields(columns...)
+
+		m := newWithModel(linkPtrValue.Interface()).Fields(linkData.Column...)
 		// 要连接的是否是一个slice
 		if typ.Kind() == reflect.Slice {
 			valValue := reflect.ValueOf(val)
@@ -287,11 +383,7 @@ func (p *WithModel) doLink(data *map[string]interface{}) {
 			continue
 		}
 		if has {
-			//if isPtr {
-			//	(*data)[field] = linkPtrValue.Interface()
-			//} else {
-				(*data)[field] = linkPtrValue.Elem().Interface()
-			//}
+			(*data)[field] = linkPtrValue.Elem().Interface()
 		}
 	}
 
