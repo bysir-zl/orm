@@ -111,3 +111,22 @@ func DecodeColumn(dbData string) *Column {
 
 	return c
 }
+
+// data
+
+func UnDuplicate(src []interface{}) []interface{} {
+	if src == nil || len(src) == 0 {
+		return src
+	}
+	temp := []interface{}{}
+	has := map[interface{}]bool{}
+	for i := range src {
+		v := src[i]
+		if _, ok := has[v]; !ok {
+			has[v] = true
+			temp = append(temp, v)
+		}
+	}
+
+	return temp
+}

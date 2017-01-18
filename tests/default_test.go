@@ -109,8 +109,8 @@ type TestModel struct {
 	RoleRaw *Role `orm:"col(role_raw);tran(json)"`
 	Roles   []Role `orm:"col(role_raws);tran(json)"`
 
-	Role   *Role `orm:"link(RoleId,Id)"`
-	Roles2 []Role `orm:"link(Role_ids,Id)"`
+	Role   *Role `orm:"link(RoleId,id)"`
+	Roles2 []Role `orm:"link(Role_ids,id)"`
 }
 
 func TestInsert(t *testing.T) {
@@ -144,7 +144,7 @@ func TestSelect(t *testing.T) {
 
 	ts := []TestModel{}
 	_, err := orm.Model(&ts).
-		Link("Role","`Hide` = 2",[]string{"Name"}).
+		Link("Role","`name` = 'sb'",[]string{"Name"}).
 		Link("Roles2","",nil).
 		Select(&ts)
 	if err != nil {

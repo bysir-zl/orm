@@ -4,6 +4,8 @@ import (
 	"log"
 	"reflect"
 	"testing"
+	"time"
+	"github.com/bysir-zl/bygo/util"
 )
 
 type X struct {
@@ -30,7 +32,7 @@ func TestJson(t *testing.T) {
 
 	log.Print(t2.FieldByName("Name").Type())
 
-	yy := indirect(ty,false)
+	yy := indirect(ty, false)
 
 	//log.Print(ty.Elem().Elem().Elem().Elem().FieldByName("Name").String())
 	yy.FieldByName("Name").SetString("zxv")
@@ -45,8 +47,8 @@ func indirect(v reflect.Value, decodingNull bool) (reflect.Value) {
 		v = v.Addr()
 	}
 	for {
-		xx:=v.Type().String()
-		xx =xx
+		xx := v.Type().String()
+		xx = xx
 		// Load value from interface, but only if the result will be
 		// usefully addressable.
 		if v.Kind() == reflect.Interface && !v.IsNil() {
@@ -70,7 +72,26 @@ func indirect(v reflect.Value, decodingNull bool) (reflect.Value) {
 
 		v = v.Elem()
 	}
-	return  v
+	return v
 }
 
+func TestElem(t *testing.T) {
+	xs := &([]X{})
 
+	tt := reflect.ValueOf(&xs)
+
+	xx := util.GetElemInterface(tt)
+	log.Print(123, reflect.ValueOf(xx).Type().String())
+
+	<-time.After(100000)
+
+}
+
+func TestMap(t *testing.T) {
+	y := map[interface{}]interface{}{
+		1:    1,
+		"123":"33",
+	}
+	var k int = 1
+	log.Print(y[k])
+}
