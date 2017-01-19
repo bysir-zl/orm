@@ -116,13 +116,16 @@ type TestModel struct {
 func TestInsert(t *testing.T) {
 	test := TestModel{}
 	test.Name = "bysir"
+	test.RoleId = 2
 	test.Role_ids = []int{1, 2, 3} // use 'tran' can transform obj to string, then save to db
 	test.Sex = true
 	r := &Role{
 		Name:"s",
+		Id:10086,
 	}
 	rs := []Role{
 		{
+			Id:10086,
 			Name:"sb",
 		},
 	}
@@ -137,20 +140,18 @@ func TestInsert(t *testing.T) {
 }
 
 func TestSelect(t *testing.T) {
-	test := TestModel{}
-	test.Name = "bysir"
-	test.Role_ids = []int{1, 2, 3} // use 'tran' can transform obj to string, then save to db
-	test.Sex = true
-
 	ts := []TestModel{}
 	_, err := orm.Model(&ts).
-		Link("Role","`name` = 'sb'",[]string{"Name"}).
+		Link("Role","",[]string{"name"}).
 		Link("Roles2","",nil).
 		Select(&ts)
 	if err != nil {
 		t.Error(err)
 	}
-	log.Printf("        %+v", ts)
+	for _,tt:=range ts{
+		log.Printf("%+v",tt.Role)
+	}
+	//log.Printf("        %+v", ts)
 	log.Printf("role    %+v", ts[0].Role)
 	log.Printf("roleraw %+v", ts[2].RoleRaw)
 	log.Printf("roles   %+v", ts[2].Roles)

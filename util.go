@@ -114,6 +114,8 @@ func DecodeColumn(dbData string) *Column {
 
 // data
 
+
+// 去重, 但是不能去除 int64 与 int 的重复 ...
 func UnDuplicate(src []interface{}) []interface{} {
 	if src == nil || len(src) == 0 {
 		return src

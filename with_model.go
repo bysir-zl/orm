@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/bysir-zl/bygo/log"
 	"github.com/bysir-zl/bygo/util"
 	"reflect"
 	"strings"
 	"time"
-	"github.com/bysir-zl/bygo/log"
 )
 
 type WithModel struct {
@@ -138,16 +138,23 @@ func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 		err = p.err
 		return
 	}
+	// 是数组还是一个对象
+	isSlice := strings.Contains(reflect.TypeOf(ptrSliceModel).String(), "[")
+	if !isSlice {
+		p.WithOutModel.limit = [2]int{0, 1}
+	}
 	result, has, err := p.WithOutModel.
 		Select()
 	if err != nil || !has {
 		return
 	}
+	p.FromDbData(isSlice, result, ptrSliceModel)
+	return
+}
 
-	col2Field := util.ReverseMap(p.modelInfo.FieldMap) // 数据库字段to结构体字段
-
-	// 是数组还是一个对象
-	if strings.Contains(reflect.TypeOf(ptrSliceModel).String(), "[") {
+func (p *WithModel) FromDbData(isSlice bool, result []map[string]interface{}, ptrSliceModel interface{}) {
+	col2Field := util.ReverseMap(p.modelInfo.FieldMap)
+	if isSlice {
 		structData := make([]map[string]interface{}, len(result))
 		for i, re := range result {
 			structItem := make(map[string]interface{}, len(re))
@@ -162,6 +169,7 @@ func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 			p.preLink(&structItem)
 			structData[i] = structItem
 		}
+
 		p.doLinkMulti(&structData)
 		errInfo := util.MapListToObjList(ptrSliceModel, structData, "")
 		if errInfo != "" {
@@ -179,13 +187,12 @@ func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 		// 转换值
 		p.tranStructData(&structItem)
 		p.doLink(&structItem)
+		//info("t",structItem)
 		_, errInfo := util.MapToObj(ptrSliceModel, structItem, "")
 		if errInfo != "" {
 			warn("table("+p.table+")", "tran", errInfo)
 		}
 	}
-
-	return
 }
 
 type linkData struct {
@@ -198,7 +205,7 @@ func (p *WithModel) Link(field string, extCondition string, columns []string) *W
 	if p.link == nil {
 		p.link = map[string]linkData{}
 	}
-	p.link[field] = linkData{ExtCondition:extCondition, Column:columns}
+	p.link[field] = linkData{ExtCondition: extCondition, Column: columns}
 	return p
 }
 
@@ -267,7 +274,6 @@ func (p *WithModel) preLink(data *map[string]interface{}) {
 			continue
 		}
 		// 检查在原来的data中有无要连接的键的值
-		//log.Info("xx",data)
 		val := (*data)[link.SelfKey]
 		if val == nil {
 			err := fmt.Errorf("have't '%s' value to link", link.SelfKey)
@@ -279,15 +285,16 @@ func (p *WithModel) preLink(data *map[string]interface{}) {
 
 		where := "`" + link.LinkKey + "` in (?) AND " + linkData.ExtCondition
 		one := InOneSql{
-			Table:     newWithModel(linkPtrValue.Interface()).GetTable(),
-			WhereField:strings.Trim(where, "AND "),
+			Table:      newWithModel(linkPtrValue.Interface()).GetTable(),
+			WhereField: strings.Trim(where, "AND "),
 		}
 		args := []interface{}{}
 
 		// 要连接的是否是一个slice
 		if typ.Kind() == reflect.Slice {
 			valValue := reflect.ValueOf(val)
-			//info( valValue.Kind())
+			// 检查值是否是一个slice
+			// 只有slice才能连接slice
 			if valValue.Kind() != reflect.Slice {
 				err := fmt.Errorf("'%s' value is not slice to link slice", link.SelfKey)
 				warn("table("+p.table+")", err)
@@ -318,12 +325,17 @@ func (p *WithModel) preLink(data *map[string]interface{}) {
 	return
 }
 
+//
+type ResultKeyMap struct {
+	OneSql string
+	Value  string // 由于数据库读出来的值可能和存放link值类型不对应(在第一个orm时会转换类型), 这里就全部转换为string去对应
+}
+
 func (p *WithModel) doLinkMulti(data *[]map[string]interface{}) {
-	linkResult := map[string]map[interface{}]map[string]interface{}{} // onesql => key => model
+	linkResult := map[ResultKeyMap]map[string]interface{}{} // onesql => key => model
 
 	// 查询数据库
 	for oneSql, pre := range p.preLinkData {
-		//reflect.New(reflect.SliceOf(reflect.TypeOf(pre.Model)))
 		pre.Args = UnDuplicate(pre.Args)
 		rs, _, err := newWithOutModel().
 			Connect(p.connect).Table(oneSql.Table).
@@ -335,18 +347,16 @@ func (p *WithModel) doLinkMulti(data *[]map[string]interface{}) {
 		}
 		for i, l := 0, len(rs); i < l; i++ {
 			r := rs[i]
-			key, ok := r[pre.ArgKey]
-			one := oneSql.String()
-			if _, ok := linkResult[one]; !ok {
-				linkResult[one] = map[interface{}]map[string]interface{}{}
-			}
+			value, ok := r[pre.ArgKey]
 			if ok {
-				linkResult[one][key] = r
+				vString, _ := util.Interface2StringWithType(value, false)
+				resultKeyMap := ResultKeyMap{
+					OneSql: oneSql.String(),
+					Value:  vString,
+				}
+				linkResult[resultKeyMap] = r
 			}
 		}
-	}
-	for k, v := range linkResult {
-		info("sbsb", k, v, )
 	}
 
 	for index, item := range *data {
@@ -365,12 +375,14 @@ func (p *WithModel) doLinkMulti(data *[]map[string]interface{}) {
 			linkPtrValue := reflect.New(typ)
 
 			where := "`" + link.LinkKey + "` in (?) AND " + linkData.ExtCondition
+			linkModel := newWithModel(linkPtrValue.Interface())
 			one := InOneSql{
-				Table:     newWithModel(linkPtrValue.Interface()).GetTable(),
-				WhereField:strings.Trim(where, "AND "),
+				Table:      linkModel.GetTable(),
+				WhereField: strings.Trim(where, "AND "),
 			}
 			// 要连接的是否是一个slice
 			has := false
+
 			if typ.Kind() == reflect.Slice {
 				valValue := reflect.ValueOf(val)
 				//info( valValue.Kind())
@@ -379,33 +391,32 @@ func (p *WithModel) doLinkMulti(data *[]map[string]interface{}) {
 					warn("table("+p.table+")", err)
 					continue
 				}
-				vl := valValue.Len()
-				maps := []map[string]interface{}{}
-				for i := 0; i < vl; i++ {
-					k := valValue.Index(i).Interface()
-					if ks, ok := linkResult[one.String()]; ok {
-						for kkk,vvv:=range ks{
-							info("test",reflect.TypeOf(k).String(),vvv,k,kkk==k)
-						}
-						info("ks", ks,k,ks[k])
-						if ms, ok := ks[k]; ok {
-							maps = append(maps, ms)
-						}
+				models := []map[string]interface{}{}
+				for i, l := 0, valValue.Len(); i < l; i++ {
+					linkValue := valValue.Index(i).Interface()
+					vString, _ := util.Interface2StringWithType(linkValue, false)
+
+					resultKeyMap := ResultKeyMap{
+						OneSql: one.String(),
+						Value:  vString,
+					}
+					if model, ok := linkResult[resultKeyMap]; ok {
+						models = append(models, model)
+						has = true
 					}
 				}
-				info("link", maps)
-				e := util.MapListToObjList(linkPtrValue.Interface(), maps, "")
-				if e != "" {
-					has = true
-				}
+
+				linkModel.FromDbData(true, models, linkPtrValue.Interface())
 			} else {
-				if ks, ok := linkResult[one.String()]; ok {
-					if ms, ok := ks[val]; ok {
-						_, e := util.MapToObj(linkPtrValue.Interface(), ms, "")
-						if e != "" {
-							has = true
-						}
-					}
+				vString, _ := util.Interface2StringWithType(val, false)
+				resultKeyMap := ResultKeyMap{
+					OneSql: one.String(),
+					Value:  vString,
+				}
+
+				if model, ok := linkResult[resultKeyMap]; ok {
+					linkModel.FromDbData(false, []map[string]interface{}{model}, linkPtrValue.Interface())
+					has = true
 				}
 			}
 
@@ -425,7 +436,6 @@ func (p *WithModel) doLink(data *map[string]interface{}) {
 	if p.link == nil || len(p.link) == 0 {
 		return
 	}
-	//linkData:= map[interface{}]interface{}{} // 已经查询好的数据
 
 	log.Info("sbsb", p.preLinkData)
 
