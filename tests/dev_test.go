@@ -1,11 +1,11 @@
 package tests
 
 import (
+	"github.com/bysir-zl/bygo/util"
 	"log"
 	"reflect"
 	"testing"
 	"time"
-	"github.com/bysir-zl/bygo/util"
 )
 
 type X struct {

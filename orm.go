@@ -1,8 +1,10 @@
 package orm
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 )
 
 var (
@@ -98,7 +100,7 @@ func RegisterModel(prtModel interface{}) {
 			if column.Tran.Typ != "" {
 				trans[field] = column.Tran
 			}
-			if column.Link.SelfKey!= "" {
+			if column.Link.SelfKey != "" {
 				links[field] = column.Link
 			}
 		}
@@ -128,4 +130,18 @@ func RegisterModelCustom(prtModel interface{}, decoder func(prtModel interface{}
 // default,mysql,xxx:xxx
 func RegisterDb(connect, driver, link string) {
 	config[connect] = Connect{Url:link, Driver:driver}
+}
+
+var translators = map[string]Translator{}
+
+var tranLock sync.RWMutex
+func RegisterTranslator(name string, translator Translator) {
+	tranLock.Lock()
+	defer tranLock.Unlock()
+	if _,has:= translators[name];has{
+		panic(fmt.Errorf("translator %s register is duplicated", name))
+		return
+	}
+
+	translators[name] = translator
 }

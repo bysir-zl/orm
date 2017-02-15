@@ -1,16 +1,16 @@
 package tests
 
 import (
-	"testing"
 	"github.com/bysir-zl/bygo/util"
+	"github.com/bysir-zl/orm"
 	"log"
 	"strings"
-	"github.com/bysir-zl/orm"
+	"testing"
 	"time"
 )
 
 func TestTagmap(t *testing.T) {
-	test := &TestModel{}
+	test := &User{}
 	tag := "orm"
 
 	tagMap := util.GetTagMapperFromPool(test)
@@ -95,7 +95,7 @@ type Role struct {
 	Name string `orm:"col(name)" json:"name"`
 }
 
-type TestModel struct {
+type User struct {
 	orm string `table:"user" connect:"default" json:"-"`
 
 	Id         int    `orm:"col(id);pk(auto);" json:"id"`
@@ -114,24 +114,22 @@ type TestModel struct {
 }
 
 func TestInsert(t *testing.T) {
-	test := TestModel{}
-	test.Name = "bysir"
-	test.RoleId = 2
-	test.Role_ids = []int{1, 2, 3} // use 'tran' can transform obj to string, then save to db
-	test.Sex = true
-	r := &Role{
-		Name:"s",
-		Id:10086,
+	test := User{
+		Name:"bysir",
+		RoleId:1,
+		Role_ids:[]int{1,2,3},
+		Sex:true,
+		RoleRaw:&Role{
+			Name:"inJson",
+			Id:  1,
+		},
 	}
-	rs := []Role{
+	test.Roles = []Role{
 		{
-			Id:10086,
+			Id:  10086,
 			Name:"sb",
 		},
 	}
-	test.Role = r
-	test.RoleRaw = r
-	test.Roles = rs
 
 	err := orm.Model(&test).Insert(&test)
 	if err != nil {
@@ -140,20 +138,20 @@ func TestInsert(t *testing.T) {
 }
 
 func TestSelect(t *testing.T) {
-	ts := []TestModel{}
+	ts := []User{}
 	_, err := orm.Model(&ts).
-		Link("Role","",[]string{"name"}).
-		Link("Roles2","",nil).
+		Link("Role", "", []string{"name"}).
+		Link("Roles2", "", nil).
 		Select(&ts)
 	if err != nil {
 		t.Error(err)
 	}
-	for _,tt:=range ts{
-		log.Printf("%+v",tt.Role)
+	for _, tt := range ts {
+		log.Printf("%+v", tt.Role)
 	}
-	//log.Printf("        %+v", ts)
+	//log.Printf("        %+v", ts)-
 	log.Printf("role    %+v", ts[0].Role)
-	log.Printf("roleraw %+v", ts[2].RoleRaw)
+	log.Printf("roleRaw %+v", ts[2].RoleRaw)
 	log.Printf("roles   %+v", ts[2].Roles)
 	log.Printf("roles2  %+v", ts[2].Roles2)
 	time.Sleep(10000000)
@@ -162,7 +160,7 @@ func TestSelect(t *testing.T) {
 func init() {
 	orm.Debug = true
 
-	orm.RegisterDb("default", "mysql", "root:@tcp(localhost:3306)/test")
-	orm.RegisterModel(new(TestModel))
+	orm.RegisterDb("default", "mysql", "root:root@tcp(localhost:3306)/test")
+	orm.RegisterModel(new(User))
 	orm.RegisterModel(new(Role))
 }

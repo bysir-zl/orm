@@ -89,6 +89,11 @@ func (p *WithOutModel) Fields(fields ...string) *WithOutModel {
 	return p
 }
 
+func (p *WithOutModel) Limit(offset, size int) *WithOutModel {
+	p.limit = [2]int{offset, size}
+	return p
+}
+
 func (p *WithOutModel) Where(condition string, args ...interface{}) *WithOutModel {
 	if p.where == nil {
 		p.where = map[string][]interface{}{}

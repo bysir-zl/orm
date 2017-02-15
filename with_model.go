@@ -1,7 +1,6 @@
 package orm
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/bysir-zl/bygo/log"
@@ -21,7 +20,6 @@ type WithModel struct {
 }
 
 func newWithModel(ptrModel interface{}) *WithModel {
-
 	w := &WithModel{}
 
 	typ := reflect.TypeOf(ptrModel).String()
@@ -36,27 +34,6 @@ func newWithModel(ptrModel interface{}) *WithModel {
 	w.table = w.modelInfo.Table
 	w.connect = w.modelInfo.ConnectName
 	return w
-}
-
-func (p *WithModel) checkPtrModel(ptrModel interface{}) interface{} {
-	m := reflect.ValueOf(ptrModel)
-	if m.Kind() != reflect.Ptr {
-		p.err = errors.New("ptrModel is't a ptr interface")
-		return nil
-	}
-
-	for {
-		if m.Elem().Kind() == reflect.Ptr {
-			m = m.Elem()
-		} else {
-			break
-		}
-	}
-	//if !m.Elem().IsNil(){
-	//	m.Elem().Set(reflect.New(m.Elem().Type()).Elem())
-	//}
-	//info(m.Interface())
-	return m.Interface()
 }
 
 func (p *WithModel) Table(table string) *WithModel {
@@ -81,6 +58,11 @@ func (p *WithModel) Where(condition string, args ...interface{}) *WithModel {
 
 func (p *WithModel) WhereIn(condition string, args ...interface{}) *WithModel {
 	p.WithOutModel.WhereIn(condition, args...)
+	return p
+}
+
+func (p *WithModel) Limit(offset, size int) *WithModel {
+	p.WithOutModel.Limit(offset, size)
 	return p
 }
 
@@ -274,8 +256,8 @@ func (p *WithModel) preLink(data *map[string]interface{}) {
 			continue
 		}
 		// 检查在原来的data中有无要连接的键的值
-		val := (*data)[link.SelfKey]
-		if val == nil {
+		val, ok := (*data)[link.SelfKey]
+		if !ok {
 			err := fmt.Errorf("have't '%s' value to link", link.SelfKey)
 			warn("table("+p.table+")", err)
 			continue
@@ -369,7 +351,7 @@ func (p *WithModel) doLinkMulti(data *[]map[string]interface{}) {
 			link, _ := p.modelInfo.Links[field]
 
 			// 检查在原来的data中有无要连接的键的值
-			//log.Info("xx",data)
+			// log.Info("xx",data)
 			val := item[link.SelfKey]
 
 			linkPtrValue := reflect.New(typ)
@@ -502,53 +484,25 @@ func (p *WithModel) doLink(data *map[string]interface{}) {
 }
 
 // 将db的值 转换为struct的值
-func (p *WithModel) tranStructData(data *map[string]interface{}) {
+func (p *WithModel) tranStructData(saveData *map[string]interface{}) {
 	for field, t := range p.modelInfo.Trans {
-		v, ok := (*data)[field]
+		v, ok := (*saveData)[field]
 		if !ok {
 			continue
 		}
 
-		switch t.Typ {
-		case "json":
-			s, ok := util.Interface2String(v, true)
-			if !ok {
-				err := errors.New(field + " is't string, can't tran 'json'")
+		if traner, ok := translators[t.Typ]; ok {
+			data, err := traner.Output(field, p.modelInfo.FieldTyp[field], v)
+			//info("tran", v,data,t.Typ)
+
+			if err != nil {
 				warn("table("+p.table+")", "tran", err)
 				continue
 			}
-
-			ptrValue := reflect.New(p.modelInfo.FieldTyp[field])
-			err := json.Unmarshal(util.S2B(s), ptrValue.Interface())
-			if err != nil {
-				warn("table("+p.table+")", "tran"+" field("+field+")", err)
-				delete(*data, field)
-			} else {
-				value := ptrValue.Elem().Interface()
-				(*data)[field] = value
-			}
-		case "time":
-			if strings.Contains(p.modelInfo.FieldTyp[field].String(), "int") {
-				// 如果struct的字段是int型的,还要转换,则数据库里的是string型的
-				// timeString  => int
-				s, ok := util.Interface2String(v, true)
-				if !ok {
-					err := errors.New(field + " is't string, can't tran 'time'")
-					warn("table("+p.table+")", "tran", err)
-					continue
-				}
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", s, time.Local)
-				if err != nil {
-					warn("table("+p.table+")", "tran", err)
-					continue
-				}
-				(*data)[field] = t.Unix()
-			} else {
-				// int => timeString
-				s, _ := util.Interface2Int(v, true)
-				t := time.Unix(s, 0).Format("2006-01-02 15:04:05")
-				(*data)[field] = t
-			}
+			(*saveData)[field] = data
+		} else {
+			warn("table("+p.table+")", "tran", "haven't traner named '"+t.Typ+"', forget register it ?")
+			continue
 		}
 	}
 	return
@@ -557,41 +511,22 @@ func (p *WithModel) tranStructData(data *map[string]interface{}) {
 // 将struct的值 转换为db的值
 func (p *WithModel) tranSaveData(saveData *map[string]interface{}) {
 	for field, t := range p.modelInfo.Trans {
+
 		v, ok := (*saveData)[field]
 		if !ok {
 			continue
 		}
 
-		switch t.Typ {
-		case "json":
-			// object => jsonString
-			bs, err := json.Marshal(v)
+		if traner, ok := translators[t.Typ]; ok {
+			data, err := traner.Input(field, p.modelInfo.FieldTyp[field], v)
 			if err != nil {
 				warn("table("+p.table+")", "tran", err)
 				continue
 			}
-			(*saveData)[field] = util.B2S(bs)
-		case "time":
-			if strings.Contains(p.modelInfo.FieldTyp[field].String(), "int") {
-				// int => timeString
-				s, _ := util.Interface2Int(v, true)
-				t := time.Unix(s, 0).Format("2006-01-02 15:04:05")
-				(*saveData)[field] = t
-			} else {
-				// timeString => int
-				s, ok := util.Interface2String(v, true)
-				if !ok {
-					err := errors.New(field + " is't string, can't tran 'time'")
-					warn("table("+p.table+")", "tran", err)
-					continue
-				}
-				t, err := time.ParseInLocation("2006-01-02 15:04:05", s, time.Local)
-				if err != nil {
-					warn("table("+p.table+")", "tran", err)
-					continue
-				}
-				(*saveData)[field] = t.Unix()
-			}
+			(*saveData)[field] = data
+		} else {
+			warn("table("+p.table+")", "tran", "haven't traner named '"+t.Typ+"', forget register it ?")
+			continue
 		}
 	}
 	return
