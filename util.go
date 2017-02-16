@@ -47,6 +47,7 @@ func EncodeTag(tag string) (data map[string]string) {
 	return
 }
 
+// 返回指定tag的string
 func Field2TagMap(fieldInfo map[string]FieldInfo, tag string) map[string]string {
 	result := map[string]string{}
 	for _, info := range fieldInfo {
@@ -67,13 +68,14 @@ func FieldType(fieldInfo map[string]FieldInfo) map[string]reflect.Type {
 	return result
 }
 
-func DecodeColumn(dbData string) *Column {
-	c := &Column{}
+func DecodeColumn(dbData string) map[string][]string {
+	kvs:=map[string][]string{}
+	if len(dbData)==0{
+		return  kvs
+	}
+
 	ds := strings.Split(dbData, ";")
 	l := len(ds)
-	if l == 0 {
-		return c
-	}
 	for i := 0; i < l; i++ {
 		kv := ds[i]
 		key := ""
@@ -86,30 +88,10 @@ func DecodeColumn(dbData string) *Column {
 			v := strings.Split(kAndV[1], ")")[0]
 			values = strings.Split(v, ",")
 		}
-		switch key {
-		case "pk":
-			c.Pk = values[0]
-		case "col":
-			c.Name = values[0]
-		case "tran":
-			c.Tran = Tran{
-				Typ:values[0],
-			}
-		case "auto":
-			c.Auto = Auto{
-				When:  values[0],
-				Typ:   values[1],
-			}
-		case "link":
-			c.Link = Link{
-				SelfKey:values[0],
-				LinkKey:values[1],
-			}
-		}
-
+		kvs[key] = values
 	}
 
-	return c
+	return kvs
 }
 
 // data

@@ -85,33 +85,52 @@ var DefaultDecoder = func(prtModel interface{}) ModelInfo {
 	trans := map[string]Tran{}
 	links := map[string]Link{}
 	for field, db := range fieldMap {
-		column := DecodeColumn(db)
-		if column.Name != "" {
-			field2Db[field] = column.Name
-		}
-		if column.Pk == "auto" {
-			autoPk = field
-		}
-		if column.Auto.Typ != "" {
-			autoFields[field] = column.Auto
-		}
-		if column.Tran.Typ != "" {
-			trans[field] = column.Tran
-		}
-		if column.Link.SelfKey != "" {
-			links[field] = column.Link
+		columnTags := DecodeColumn(db)
+		for key, values := range columnTags {
+			switch key {
+			case "pk":
+				if len(values) >= 1 {
+					if values[0] == "auto" {
+						autoPk = field
+					}
+				}
+			case "col":
+				if len(values) >= 1 {
+					field2Db[field] = values[0]
+				}
+			case "tran":
+				if len(values) >= 1 {
+					trans[field] = Tran{
+						Typ: values[0],
+					}
+				}
+			case "auto":
+				if len(values) >= 2 {
+					autoFields[field] = Auto{
+						When: values[0],
+						Typ:  values[1],
+					}
+				}
+			case "link":
+				if len(values) >= 2 {
+					links[field] = Link{
+						SelfKey: values[0],
+						LinkKey: values[1],
+					}
+				}
+			}
 		}
 	}
 
 	m := ModelInfo{
-		FieldMap:   field2Db,
-		AutoPk:     autoPk,
-		Table:      table,
-		ConnectName:connect,
-		AutoFields: autoFields,
-		FieldTyp:   fieldTyp,
-		Trans:      trans,
-		Links:      links,
+		FieldMap:    field2Db,
+		AutoPk:      autoPk,
+		Table:       table,
+		ConnectName: connect,
+		AutoFields:  autoFields,
+		FieldTyp:    fieldTyp,
+		Trans:       trans,
+		Links:       links,
 	}
 
 	return m
@@ -131,16 +150,17 @@ func RegisterModelCustom(prtModel interface{}, decoder func(prtModel interface{}
 
 // default,mysql,xxx:xxx
 func RegisterDb(connect, driver, link string) {
-	config[connect] = Connect{Url:link, Driver:driver}
+	config[connect] = Connect{Url: link, Driver: driver}
 }
 
 var translators = map[string]Translator{}
 
 var tranLock sync.RWMutex
+
 func RegisterTranslator(name string, translator Translator) {
 	tranLock.Lock()
 	defer tranLock.Unlock()
-	if _,has:= translators[name];has{
+	if _, has := translators[name]; has {
 		panic(fmt.Errorf("translator %s register is duplicated", name))
 		return
 	}
