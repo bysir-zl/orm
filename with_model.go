@@ -111,7 +111,14 @@ func (p *WithModel) Insert(prtModel interface{}) (err error) {
 	if err != nil {
 		return
 	}
-	id = id
+
+	// 设置主键
+	if p.modelInfo.AutoPk != "" && id != 0 {
+		util.MapToObj(prtModel, map[string]interface{}{
+			p.modelInfo.AutoPk:id,
+		}, "")
+	}
+
 	return
 }
 
@@ -134,6 +141,7 @@ func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 	return
 }
 
+// 将从db里取得的map赋值到model里
 func (p *WithModel) FromDbData(isSlice bool, result []map[string]interface{}, ptrSliceModel interface{}) {
 	col2Field := util.ReverseMap(p.modelInfo.FieldMap)
 	if isSlice {

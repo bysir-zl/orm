@@ -71,53 +71,55 @@ func QuerySql(sql string, args ...interface{}) (has bool, data []map[string]inte
 	return
 }
 
+var DefaultDecoder = func(prtModel interface{}) ModelInfo {
+	tag := "orm"
+	fInfo := DecodeStruct(prtModel)
+	table := Field2TagMap(fInfo, "table")["orm"]
+	connect := Field2TagMap(fInfo, "connect")["orm"]
+	fieldMap := Field2TagMap(fInfo, tag)
+	fieldTyp := FieldType(fInfo)
+
+	field2Db := map[string]string{}
+	autoPk := ""
+	autoFields := map[string]Auto{}
+	trans := map[string]Tran{}
+	links := map[string]Link{}
+	for field, db := range fieldMap {
+		column := DecodeColumn(db)
+		if column.Name != "" {
+			field2Db[field] = column.Name
+		}
+		if column.Pk == "auto" {
+			autoPk = field
+		}
+		if column.Auto.Typ != "" {
+			autoFields[field] = column.Auto
+		}
+		if column.Tran.Typ != "" {
+			trans[field] = column.Tran
+		}
+		if column.Link.SelfKey != "" {
+			links[field] = column.Link
+		}
+	}
+
+	m := ModelInfo{
+		FieldMap:   field2Db,
+		AutoPk:     autoPk,
+		Table:      table,
+		ConnectName:connect,
+		AutoFields: autoFields,
+		FieldTyp:   fieldTyp,
+		Trans:      trans,
+		Links:      links,
+	}
+
+	return m
+}
+
 // 注册模型， 将字段对应写入map
 func RegisterModel(prtModel interface{}) {
-	RegisterModelCustom(prtModel, func(prtModel interface{}) ModelInfo {
-		tag := "orm"
-		fInfo := DecodeStruct(prtModel)
-		table := Field2TagMap(fInfo, "table")["orm"]
-		connect := Field2TagMap(fInfo, "connect")["orm"]
-		fieldMap := Field2TagMap(fInfo, tag)
-		fieldTyp := FieldType(fInfo)
-
-		field2Db := map[string]string{}
-		autoPk := ""
-		autoFields := map[string]Auto{}
-		trans := map[string]Tran{}
-		links := map[string]Link{}
-		for field, db := range fieldMap {
-			column := DecodeColumn(db)
-			if column.Name != "" {
-				field2Db[field] = column.Name
-			}
-			if column.Pk == "auto" {
-				autoPk = field
-			}
-			if column.Auto.Typ != "" {
-				autoFields[field] = column.Auto
-			}
-			if column.Tran.Typ != "" {
-				trans[field] = column.Tran
-			}
-			if column.Link.SelfKey != "" {
-				links[field] = column.Link
-			}
-		}
-
-		m := ModelInfo{
-			FieldMap:   field2Db,
-			AutoPk:     autoPk,
-			Table:      table,
-			ConnectName:connect,
-			AutoFields: autoFields,
-			FieldTyp:   fieldTyp,
-			Trans:      trans,
-			Links:      links,
-		}
-
-		return m
-	})
+	RegisterModelCustom(prtModel, DefaultDecoder)
 }
 
 func RegisterModelCustom(prtModel interface{}, decoder func(prtModel interface{}) ModelInfo) {
