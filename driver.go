@@ -110,6 +110,7 @@ func (p *DbDriverMysql) Exec(sql string, args ...interface{}) (affectCount int64
 		return
 	}
 
+
 	defer stmt.Close()
 	result, err := stmt.Exec(args...)
 
