@@ -2,8 +2,8 @@ package orm
 
 import (
 	"errors"
-	"time"
 	"strings"
+	"time"
 )
 
 type WithOutModel struct {
@@ -166,7 +166,7 @@ func (p *WithOutModel) Delete() (affect int64, err error) {
 	return
 }
 
-func (p *WithOutModel) Update(saveData map[string]interface{}) (id int64, err error) {
+func (p *WithOutModel) Update(saveData map[string]interface{}) (count int64, err error) {
 	if p.err != nil {
 		err = p.err
 		return
@@ -189,7 +189,7 @@ func (p *WithOutModel) Update(saveData map[string]interface{}) (id int64, err er
 	if err != nil {
 		return
 	}
-	_, id, err = p.ExecSql(sql, args...)
+	count,_, err = p.ExecSql(sql, args...)
 	if err != nil {
 		return
 	}

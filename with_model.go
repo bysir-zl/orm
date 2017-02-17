@@ -122,6 +122,48 @@ func (p *WithModel) Insert(prtModel interface{}) (err error) {
 	return
 }
 
+
+func (p *WithModel) Update(prtModel interface{}) (count int64,err error) {
+	if p.err != nil {
+		err = p.err
+		return
+	}
+
+	// 读取保存的键值对
+	fieldData := util.ObjToMap(prtModel, "")
+
+	// 自动添加字段
+	autoSet, err := p.GetAutoSetField("update")
+	if err != nil {
+		return
+	}
+	if autoSet != nil && len(autoSet) != 0 {
+		for k, v := range autoSet {
+			fieldData[k] = v
+		}
+		// 将自动添加的字段附加到model里，方便返回
+		util.MapToObj(prtModel, autoSet, "")
+	}
+
+	// 转换值
+	p.tranSaveData(&fieldData)
+
+	// mapToDb
+	dbData := map[string]interface{}{}
+	for k, v := range fieldData {
+		dbKey, ok := p.modelInfo.FieldMap[k]
+		if ok {
+			dbData[dbKey] = v
+		}
+	}
+
+	count, err = p.WithOutModel.
+		Update(dbData)
+
+	return
+}
+
+
 func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 	if p.err != nil {
 		err = p.err

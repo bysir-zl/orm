@@ -54,9 +54,7 @@ func Singleton(connect *Connect) (*DbDriverMysql, error) {
 // 返回一个[]map[string]interface 对应多行键值对
 func (p *DbDriverMysql) Query(sql string, args ...interface{}) (data []map[string]interface{}, err error) {
 	// SELECT
-	err = nil
 
-	data = nil
 	stmt, err := p.db.Prepare(sql)
 	if err != nil {
 		return
@@ -73,8 +71,9 @@ func (p *DbDriverMysql) Query(sql string, args ...interface{}) (data []map[strin
 		return
 	}
 
-	scanArgs := make([]interface{}, len(columns))
-	values := make([]interface{}, len(columns))
+	l := len(columns)
+	scanArgs := make([]interface{}, l)
+	values := make([]interface{}, l)
 	for i := range values {
 		scanArgs[i] = &values[i]
 	}
@@ -82,10 +81,10 @@ func (p *DbDriverMysql) Query(sql string, args ...interface{}) (data []map[strin
 	data = []map[string]interface{}{}
 	for rows.Next() {
 		st := map[string]interface{}{}
-		err2 := rows.Scan(scanArgs...)
+		e := rows.Scan(scanArgs...)
 
-		if err2 != nil {
-			err = err2
+		if e != nil {
+			err = e
 			return
 		}
 		for i, col := range values {
