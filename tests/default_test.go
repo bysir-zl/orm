@@ -115,9 +115,9 @@ type User struct {
 
 func TestInsert(t *testing.T) {
 	test := User{
-		Name:"bysir",
+		Name:"test",
 		RoleId:1,
-		Role_ids:[]int{1,2,3},
+		Role_ids:[]int{1,2,3,4},
 		Sex:true,
 		RoleRaw:&Role{
 			Name:"inJson",
@@ -126,8 +126,8 @@ func TestInsert(t *testing.T) {
 	}
 	test.Roles = []Role{
 		{
-			Id:  10086,
-			Name:"sb",
+			Id:  100,
+			Name:"123",
 		},
 	}
 

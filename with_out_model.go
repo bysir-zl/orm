@@ -23,7 +23,7 @@ type orderItem struct {
 
 func newWithOutModel() *WithOutModel {
 	return &WithOutModel{
-		connect:"default",
+		connect: "default",
 	}
 }
 
@@ -119,6 +119,14 @@ func (p *WithOutModel) WhereIn(condition string, args ...interface{}) *WithOutMo
 	return p
 }
 
+func (p *WithOutModel) Order(field string, desc string) *WithOutModel {
+	if p.order == nil {
+		p.order = []orderItem{}
+	}
+	p.order = append(p.order, orderItem{Field: field, Desc: desc})
+	return p
+}
+
 func (p *WithOutModel) Insert(saveData map[string]interface{}) (id int64, err error) {
 	if p.err != nil {
 		err = p.err
@@ -189,7 +197,7 @@ func (p *WithOutModel) Update(saveData map[string]interface{}) (count int64, err
 	if err != nil {
 		return
 	}
-	count,_, err = p.ExecSql(sql, args...)
+	count, _, err = p.ExecSql(sql, args...)
 	if err != nil {
 		return
 	}

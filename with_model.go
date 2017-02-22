@@ -66,6 +66,11 @@ func (p *WithModel) Limit(offset, size int) *WithModel {
 	return p
 }
 
+func (p *WithModel) Order(field, desc string) *WithModel {
+	p.WithOutModel.Order(field, desc)
+	return p
+}
+
 func (p *WithModel) Insert(prtModel interface{}) (err error) {
 	if p.err != nil {
 		err = p.err
@@ -115,15 +120,14 @@ func (p *WithModel) Insert(prtModel interface{}) (err error) {
 	// 设置主键
 	if p.modelInfo.AutoPk != "" && id != 0 {
 		util.MapToObj(prtModel, map[string]interface{}{
-			p.modelInfo.AutoPk:id,
+			p.modelInfo.AutoPk: id,
 		}, "")
 	}
 
 	return
 }
 
-
-func (p *WithModel) Update(prtModel interface{}) (count int64,err error) {
+func (p *WithModel) Update(prtModel interface{}) (count int64, err error) {
 	if p.err != nil {
 		err = p.err
 		return
@@ -162,7 +166,6 @@ func (p *WithModel) Update(prtModel interface{}) (count int64,err error) {
 
 	return
 }
-
 
 func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 	if p.err != nil {
