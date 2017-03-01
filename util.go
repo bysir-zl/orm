@@ -6,7 +6,7 @@ import (
 )
 
 type FieldInfo struct {
-	Name         string
+	Name         string // 字段名
 	Typ          reflect.Type
 	CanInterface bool
 	Tags         map[string]string
@@ -47,7 +47,7 @@ func EncodeTag(tag string) (data map[string]string) {
 	return
 }
 
-// 返回指定tag的string
+// 返回指定tag的 字段名=>tag value
 func Field2TagMap(fieldInfo map[string]FieldInfo, tag string) map[string]string {
 	result := map[string]string{}
 	for _, info := range fieldInfo {
@@ -60,6 +60,7 @@ func Field2TagMap(fieldInfo map[string]FieldInfo, tag string) map[string]string 
 	return result
 }
 
+// 获取字段类型
 func FieldType(fieldInfo map[string]FieldInfo) map[string]reflect.Type {
 	result := map[string]reflect.Type{}
 	for _, info := range fieldInfo {

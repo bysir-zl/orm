@@ -64,11 +64,11 @@ func Insert(mo interface{}) (err error) {
 }
 
 func ExecSql(sql string, args ...interface{}) (affectCount int64, lastInsertId int64, err error) {
-	return
+	return newWithOutModel().ExecSql(sql, args...)
 }
 
-func QuerySql(sql string, args ...interface{}) (has bool, data []map[string]interface{}, err error) {
-	return
+func QuerySql(sql string, args ...interface{}) (data []map[string]interface{}, err error) {
+	return newWithOutModel().QuerySql(sql, args...)
 }
 
 var DefaultDecoder = func(prtModel interface{}) ModelInfo {

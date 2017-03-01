@@ -51,6 +51,18 @@ func (p *WithModel) Fields(fields ...string) *WithModel {
 	return p
 }
 
+func (p *WithModel) FieldsByModel(fields ...string) *WithModel {
+	temp := []string{}
+	for _, f := range fields {
+		if db, ok := p.modelInfo.FieldMap[f]; ok {
+			temp = append(temp, db)
+		}
+	}
+
+	p.WithOutModel.Fields(temp...)
+	return p
+}
+
 func (p *WithModel) Where(condition string, args ...interface{}) *WithModel {
 	p.WithOutModel.Where(condition, args...)
 	return p
@@ -236,6 +248,7 @@ type linkData struct {
 }
 
 // 连接对象
+// 作者不推荐使用,这只是一个实验功能,太复杂不灵活,性能没保障
 func (p *WithModel) Link(field string, extCondition string, columns []string) *WithModel {
 	if p.link == nil {
 		p.link = map[string]linkData{}
@@ -564,7 +577,6 @@ func (p *WithModel) tranStructData(saveData *map[string]interface{}) {
 // 将struct的值 转换为db的值
 func (p *WithModel) tranSaveData(saveData *map[string]interface{}) {
 	for field, t := range p.modelInfo.Trans {
-
 		v, ok := (*saveData)[field]
 		if !ok {
 			continue
