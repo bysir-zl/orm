@@ -2,18 +2,21 @@ package orm
 
 import "github.com/bysir-zl/bygo/log"
 
+var logger *log.Logger
+
 func warn(a ...interface{}) {
 	if Debug {
-		log.Warn("ORM", a...)
+		logger.Warn("ORM", a...)
 	}
 }
 
 func info(a ...interface{}) {
 	if Debug {
-		log.Info("ORM", a...)
+		logger.Info("ORM", a...)
 	}
 }
 
 func init() {
-	log.SetCallDepth(4)
+	logger = log.NewLogger()
+	logger.SetCallDepth(4)
 }

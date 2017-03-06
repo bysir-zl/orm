@@ -17,7 +17,7 @@ where map[string]([]interface{}), order []orderItem, limit [2]int ) (sql string,
 	//field
 	fieldString := "*"
 	if fields != nil && len(fields) != 0 {
-		fieldString = "`" + strings.Join(fields, "`,`") + "`"
+		fieldString =  strings.Join(fields, ",")
 	}
 
 	sql = sql + fieldString + " "
