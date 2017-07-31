@@ -23,7 +23,7 @@ type orderItem struct {
 
 func newWithOutModel() *WithOutModel {
 	return &WithOutModel{
-		connect:"default",
+		connect: "default",
 	}
 }
 
@@ -102,6 +102,8 @@ func (p *WithOutModel) Where(condition string, args ...interface{}) *WithOutMode
 	return p
 }
 
+// condition 条件 eg: `id in (?)`. 注意 必须有(?)占位符, 这其实只是一个帮你拼?占位符的语法糖
+// args 参数 eg: `1,2,3`. 注意 只能是基础类型, 并不支持切片等, 有多个参数请展开
 func (p *WithOutModel) WhereIn(condition string, args ...interface{}) *WithOutModel {
 	if args == nil || len(args) == 0 {
 		return p
@@ -119,6 +121,7 @@ func (p *WithOutModel) WhereIn(condition string, args ...interface{}) *WithOutMo
 	return p
 }
 
+// 插入
 func (p *WithOutModel) Insert(saveData map[string]interface{}) (id int64, err error) {
 	if p.err != nil {
 		err = p.err
@@ -145,6 +148,7 @@ func (p *WithOutModel) Insert(saveData map[string]interface{}) (id int64, err er
 	return
 }
 
+// 删除, 注意必须要有where条件
 func (p *WithOutModel) Delete() (affect int64, err error) {
 	if p.err != nil {
 		err = p.err
@@ -166,6 +170,7 @@ func (p *WithOutModel) Delete() (affect int64, err error) {
 	return
 }
 
+// 更新, 注意必须要有where条件
 func (p *WithOutModel) Update(saveData map[string]interface{}) (aff int64, err error) {
 	if p.err != nil {
 		err = p.err
@@ -196,6 +201,7 @@ func (p *WithOutModel) Update(saveData map[string]interface{}) (aff int64, err e
 	return
 }
 
+// 查找
 func (p *WithOutModel) Select() (result []map[string]interface{}, has bool, err error) {
 	if p.err != nil {
 		err = p.err
@@ -214,6 +220,7 @@ func (p *WithOutModel) Select() (result []map[string]interface{}, has bool, err 
 	return
 }
 
+// 查找并返回一个
 func (p *WithOutModel) First() (result map[string]interface{}, has bool, err error) {
 	if p.err != nil {
 		err = p.err

@@ -46,26 +46,33 @@ func (p *WithModel) Connect(connect string) *WithModel {
 	return p
 }
 
+// 在更新或者查找时的字段
 func (p *WithModel) Fields(fields ...string) *WithModel {
 	p.WithOutModel.Fields(fields...)
 	return p
 }
 
+// condition 条件 eg: `id = ?`. ?是占位符, 参数通过args传递
+// args 参数 eg: `1,2,3`. 注意 只能是基础类型, 并不支持切片等, 有多个参数请展开
 func (p *WithModel) Where(condition string, args ...interface{}) *WithModel {
 	p.WithOutModel.Where(condition, args...)
 	return p
 }
 
+// condition 条件 eg: `id in (?)`. 注意 必须有(?)占位符, 这其实只是一个帮你拼?占位符的语法糖
+// args 参数 eg: `1,2,3`. 注意 只能是基础类型, 并不支持切片等, 有多个参数请展开
 func (p *WithModel) WhereIn(condition string, args ...interface{}) *WithModel {
 	p.WithOutModel.WhereIn(condition, args...)
 	return p
 }
 
+// limit
 func (p *WithModel) Limit(offset, size int) *WithModel {
 	p.WithOutModel.Limit(offset, size)
 	return p
 }
 
+// 插入一个模型
 func (p *WithModel) Insert(prtModel interface{}) (err error) {
 	if p.err != nil {
 		err = p.err
@@ -122,6 +129,9 @@ func (p *WithModel) Insert(prtModel interface{}) (err error) {
 	return
 }
 
+// 查找一列或多列
+// 可以传入切片引用或者一个对象引用
+// eg: d := &[]User{}, d := &User{}
 func (p *WithModel) Select(ptrSliceModel interface{}) (has bool, err error) {
 	if p.err != nil {
 		err = p.err
@@ -419,7 +429,6 @@ func (p *WithModel) doLinkMulti(data *[]map[string]interface{}) {
 }
 
 // 连接对象
-// todo 在需要多次link的时候, 优化查询相同表(where in)
 func (p *WithModel) doLink(data *map[string]interface{}) {
 	p.preLinkData = nil
 
